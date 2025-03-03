@@ -1,0 +1,85 @@
+{
+    "database": "postgresql",
+    "schema": "public",
+    "types": {
+        "status": ["active", "inactive", "pending"],
+        "priority": ["low", "medium", "high"]
+    },
+    "table": {
+        "website_info": {
+            "columns": {
+                "Name": "Char(50,notnull)",
+                "Email": "Char(50,unique)",
+                "Status": "status DEFAULT 'active'",
+                "Priority": "priority",
+                "CreatedAt": "DateTime",
+                "Tags": "Text[]",
+                "Metadata": "Jsonb",
+                "LogoFile": "File",
+                "BannerImage": "Image",
+                "BrochurePDF": "PDF",
+                "ManualDoc": "Document",
+                "PromoVideo": "Video",
+                "ThemeAudio": "Audio",
+                "Visits": "BigInt DEFAULT 0",
+                "FullName": "Generated(Name || ' Website')"
+            },
+            "constraints": {
+                "primary_key": ["id"],
+                "check": "Visits >= 0"
+            },
+            "indexes": {
+                "idx_email": "Email",
+                "idx_name": "Name"
+            },
+            "comments": {
+                "table": "Stores website information and media files",
+                "Name": "Website name",
+                "Email": "Contact email"
+            }
+        },
+        "Address": {
+            "columns": {
+                "web": "Foreign(website_info) ON DELETE CASCADE",
+                "Village": "Char(50)",
+                "Road": "Char(50,notnull)",
+                "Population": "Int",
+                "MapImage": "Image"
+            },
+            "constraints": {
+                "primary_key": ["id"],
+                "foreign_key": {
+                    "web": "website_info(id) ON DELETE CASCADE"
+                },
+                "check": "Population >= 0"
+            },
+            "comments": {
+                "table": "Stores address details linked to websites"
+            }
+        },
+        "website_categories": {
+            "columns": {
+                "website_id": "Foreign(website_info)",
+                "category_id": "Foreign(categories)"
+            },
+            "constraints": {
+                "primary_key": ["website_id", "category_id"]
+            },
+            "comments": {
+                "table": "Junction table for website and category many-to-many relationship"
+            }
+        },
+        "categories": {
+            "columns": {
+                "Name": "Char(50,unique)",
+                "Description": "Text"
+            },
+            "constraints": {
+                "primary_key": ["id"]
+            },
+            "comments": {
+                "table": "Stores category definitions"
+            }
+        }
+    }
+}
