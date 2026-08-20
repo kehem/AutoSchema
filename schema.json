@@ -1,85 +1,381 @@
 {
     "database": "postgresql",
     "schema": "public",
-    "types": {
-        "status": ["active", "inactive", "pending"],
-        "priority": ["low", "medium", "high"]
+
+    "roles": [
+        { "name": "app_user", "login": true },
+        { "name": "reporting" }
+    ],
+
+    "extensions": [
+        { "name": "pgcrypto", "schema": "public", "cascade": true },
+        { "name": "citext", "cascade": true },
+        { "name": "btree_gist", "cascade": true },
+        "uuid-ossp"
+    ],
+
+    "sequences": {
+        "order_number_seq": { "start": 1000, "increment": 5, "minvalue": 1, "maxvalue": 999999, "cycle": true },
+        "audit_seq": { "start": 1, "increment": 1 }
     },
-    "table": {
-        "website_info": {
+
+    "types": {
+        "status": ["active", "inactive", "pending", "archived"],
+        "priority": ["low", "medium", "high", "critical"],
+        "user_role": ["admin", "editor", "viewer", "api"]
+    },
+
+    "domains": {
+        "positive_int": { "type": "INTEGER", "check": "VALUE > 0", "comment": "Positive integer domain" },
+        "us_zip_code": { "type": "TEXT", "check": "VALUE ~ '^[0-9]{5}(-[0-9]{4})?$'" },
+        "email_address": {
+            "type": "VARCHAR(320)",
+            "check": "VALUE ~ '^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$'"
+        }
+    },
+
+    "tables": {
+        "users": {
+            "table_options": { "with": "fillfactor=70", "tablespace": "pg_default" },
             "columns": {
-                "Name": "Char(50,notnull)",
-                "Email": "Char(50,unique)",
-                "Status": "status DEFAULT 'active'",
-                "Priority": "priority",
-                "CreatedAt": "DateTime",
-                "Tags": "Text[]",
-                "Metadata": "Jsonb",
-                "LogoFile": "File",
-                "BannerImage": "Image",
-                "BrochurePDF": "PDF",
-                "ManualDoc": "Document",
-                "PromoVideo": "Video",
-                "ThemeAudio": "Audio",
-                "Visits": "BigInt DEFAULT 0",
-                "FullName": "Generated(Name || ' Website')"
+                "id": {
+                    "type": "UUID",
+                    "default": "gen_random_uuid()",
+                    "primary_key": true,
+                    "comment": "Primary key"
+                },
+                "username": { "type": "CITEXT", "notnull": true, "unique": true, "comment": "Unique username (case-insensitive)" },
+                "email": { "type": "email_address", "notnull": true },
+                "password_hash": { "type": "BYTEA", "notnull": true },
+                "role": { "type": "user_role", "default": "'viewer'" },
+                "created_at": { "type": "TIMESTAMPTZ", "default": "NOW()", "notnull": true },
+                "last_login": { "type": "TIMESTAMPTZ" },
+                "session_timeout": { "type": "INTERVAL", "default": "'2 hours'" },
+                "ip_address": { "type": "INET" },
+                "mac": { "type": "MACADDR" },
+                "profile": { "type": "JSONB", "default": "'{}'::jsonb" },
+                "prefs": { "type": "TEXT[]", "default": "'{}'" },
+                "deleted_at": { "type": "TIMESTAMPTZ" },
+                "active_range": { "type": "DATERANGE" },
+                "username_search": { "type": "TSVECTOR", "generated": "ALWAYS AS (to_tsvector('english', username)) STORED" }
             },
             "constraints": {
                 "primary_key": ["id"],
-                "check": "Visits >= 0"
+                "unique": { "uq_users_username_email": ["username", "email"] },
+                "check": { "chk_email_not_empty": "email <> ''" },
+                "exclude": {
+                    "excl_users_daterange": {
+                        "elems": [ { "column": "active_range", "with": "&&" } ],
+                        "using": "GIST",
+                        "where": "active_range IS NOT NULL"
+                    }
+                }
             },
             "indexes": {
-                "idx_email": "Email",
-                "idx_name": "Name"
+                "idx_users_created": { "columns": "created_at DESC", "type": "BTREE" },
+                "idx_users_profile": { "columns": "profile", "type": "GIN" },
+                "idx_users_lower_email": {
+                    "unique": true,
+                    "columns": "LOWER(email)",
+                    "type": "BTREE",
+                    "where": "deleted_at IS NULL"
+                },
+                "idx_users_prefs": { "columns": "prefs", "type": "GIN" }
             },
             "comments": {
-                "table": "Stores website information and media files",
-                "Name": "Website name",
-                "Email": "Contact email"
+                "table": "Application user accounts",
+                "username": "Login name",
+                "email": "Contact e-mail address"
             }
         },
-        "Address": {
+
+        "categories": {
             "columns": {
-                "web": "Foreign(website_info) ON DELETE CASCADE",
-                "Village": "Char(50)",
-                "Road": "Char(50,notnull)",
-                "Population": "Int",
-                "MapImage": "Image"
+                "id": { "type": "BIGSERIAL", "primary_key": true },
+                "name": { "type": "VARCHAR(100)", "notnull": true, "unique": true },
+                "parent_id": { "type": "BIGINT", "references": { "table": "categories", "column": "id", "ondelete": "CASCADE" } },
+                "slug": { "type": "VARCHAR(120)" },
+                "position": { "type": "SMALLINT", "default": "0", "check": "position >= 0" }
             },
             "constraints": {
                 "primary_key": ["id"],
-                "foreign_key": {
-                    "web": "website_info(id) ON DELETE CASCADE"
-                },
-                "check": "Population >= 0"
+                "check": { "chk_slug_not_empty": "slug IS NULL OR slug <> ''" }
             },
             "comments": {
-                "table": "Stores address details linked to websites"
+                "table": "Content categories (self-referencing tree)"
             }
         },
-        "website_categories": {
+
+        "products": {
             "columns": {
-                "website_id": "Foreign(website_info)",
-                "category_id": "Foreign(categories)"
+                "id": { "type": "INTEGER", "identity": { "type": "ALWAYS", "start": 1, "increment": 1 }, "primary_key": true },
+                "name": { "type": "VARCHAR(200)", "notnull": true },
+                "description": { "type": "TEXT" },
+                "price": { "type": "NUMERIC(10,2)", "notnull": true, "check": "price >= 0" },
+                "cost": { "type": "MONEY" },
+                "discount": { "type": "DOUBLE PRECISION", "default": "0.0" },
+                "rating": { "type": "REAL" },
+                "sku": { "type": "VARCHAR(50)", "collation": "\"C\"", "notnull": true, "unique": true },
+                "stock": { "type": "positive_int", "default": "1" },
+                "is_active": { "type": "BOOLEAN", "default": "true" },
+                "flags": { "type": "BIT(8)", "default": "B'00000000'" },
+                "category_id": { "type": "INTEGER", "references": { "table": "categories", "column": "id", "ondelete": "RESTRICT", "onupdate": "CASCADE" } },
+                "meta": { "type": "JSON", "default": "'{}'" },
+                "tags": { "type": "VARCHAR(50)[]", "default": "'{}'" },
+                "geoloc": { "type": "POINT" },
+                "bounding_box": { "type": "BOX" },
+                "region": { "type": "POLYGON" },
+                "valid_during": { "type": "TSTZRANGE" },
+                "min_quantity": { "type": "SMALLINT" },
+                "max_quantity": { "type": "SMALLINT" },
+                "quantity_range": { "type": "INT4RANGE", "generated": "ALWAYS AS (int4range(min_quantity, max_quantity)) STORED" },
+                "data": { "type": "BYTEA" },
+                "created_at": { "type": "TIMESTAMPTZ", "default": "CURRENT_TIMESTAMP", "notnull": true },
+                "updated_at": { "type": "TIMESTAMP" },
+                "price_with_tax": { "type": "NUMERIC(10,2)", "generated": "ALWAYS AS (price * 1.15) STORED" }
             },
             "constraints": {
-                "primary_key": ["website_id", "category_id"]
+                "primary_key": ["id"],
+                "check": {
+                    "chk_qty_range": "min_quantity <= max_quantity"
+                },
+                "foreign_key": {
+                    "category_id": "public.categories(id) ON DELETE RESTRICT ON UPDATE CASCADE"
+                },
+                "exclude": {
+                    "excl_products_qty": {
+                        "elems": [
+                            { "column": "id", "with": "=" },
+                            { "column": "quantity_range", "with": "&&" }
+                        ],
+                        "using": "GIST"
+                    }
+                }
             },
+            "indexes": {
+                "idx_products_name": "name",
+                "idx_products_price": { "columns": "price", "type": "BRIN" },
+                "idx_products_tags_gin": { "columns": "tags", "type": "GIN" },
+                "idx_products_cover": { "columns": "id", "include": "name, price" },
+                "idx_products_partial": { "unique": true, "columns": "sku", "where": "is_active" }
+            },
+            "triggers": [
+                {
+                    "name": "trg_products_set_updated",
+                    "timing": "BEFORE",
+                    "event": "UPDATE",
+                    "for_each_row": true,
+                    "function": "set_updated_at()",
+                    "comment": "Sets updated_at on update"
+                }
+            ],
             "comments": {
-                "table": "Junction table for website and category many-to-many relationship"
+                "table": "Product catalog entries"
             }
         },
-        "categories": {
+
+        "orders": {
             "columns": {
-                "Name": "Char(50,unique)",
-                "Description": "Text"
+                "id": { "type": "BIGSERIAL" },
+                "order_number": { "type": "VARCHAR(30)", "default": "nextval('order_number_seq')::text", "notnull": true },
+                "user_id": { "type": "UUID", "references": { "table": "users", "column": "id", "ondelete": "SET NULL", "deferrable": "DEFERRABLE", "initially": "DEFERRED" } },
+                "status": { "type": "status", "default": "'pending'" },
+                "priority": { "type": "priority" },
+                "total": { "type": "NUMERIC(12,2)", "default": "0" },
+                "created_at": { "type": "TIMESTAMPTZ", "default": "NOW()", "notnull": true },
+                "shipped_date": { "type": "DATE" },
+                "delivery_window": { "type": "TSRANGE" },
+                "notes": { "type": "TEXT" },
+                "zip": { "type": "us_zip_code" }
+            },
+            "constraints": {
+                "primary_key": ["id"],
+                "unique": { "uq_orders_number": "order_number" },
+                "check": { "chk_total_positive": "total >= 0" }
+            },
+            "indexes": {
+                "idx_orders_user": { "columns": "user_id", "type": "HASH" },
+                "idx_orders_status_created": { "columns": "status, created_at DESC", "where": "status = 'pending'" }
+            },
+            "row_security": true,
+            "policies": [
+                {
+                    "name": "pol_orders_owner",
+                    "command": "SELECT",
+                    "role": "app_user",
+                    "using": "user_id = current_setting('app.user_id')::uuid"
+                },
+                {
+                    "name": "pol_orders_insert",
+                    "command": "INSERT",
+                    "role": "app_user",
+                    "check": "user_id = current_setting('app.user_id')::uuid"
+                }
+            ],
+            "comments": {
+                "table": "Customer orders with row-level security"
+            }
+        },
+
+        "order_items": {
+            "columns": {
+                "id": { "type": "BIGSERIAL" },
+                "order_id": { "type": "BIGINT" },
+                "product_id": { "type": "INTEGER" },
+                "qty": { "type": "SMALLINT", "default": "1", "check": "qty > 0" },
+                "unit_price": { "type": "NUMERIC(10,2)", "notnull": true },
+                "line_total": { "type": "NUMERIC(12,2)", "generated": "ALWAYS AS (qty * unit_price) STORED" }
+            },
+            "constraints": {
+                "primary_key": ["id"],
+                "unique": { "uq_order_items": ["order_id", "product_id"] },
+                "foreign_key": [
+                    {
+                        "columns": "order_id",
+                        "ref_table": "orders",
+                        "ref_columns": "id",
+                        "ondelete": "CASCADE"
+                    },
+                    {
+                        "columns": "product_id",
+                        "ref_table": "products",
+                        "ref_columns": "id",
+                        "ondelete": "RESTRICT"
+                    }
+                ]
+            },
+            "indexes": {
+                "idx_order_items_order": "order_id",
+                "idx_order_items_product": "product_id"
+            },
+            "comments": {
+                "table": "Line items inside an order"
+            }
+        },
+
+        "audit_log": {
+            "columns": {
+                "id": { "type": "BIGSERIAL" },
+                "entity_type": { "type": "VARCHAR(100)", "notnull": true },
+                "entity_id": { "type": "VARCHAR(100)" },
+                "action": { "type": "VARCHAR(20)", "notnull": true },
+                "actor": { "type": "UUID" },
+                "changes": { "type": "JSONB" },
+                "request_id": { "type": "UUID", "default": "gen_random_uuid()" },
+                "event_time": { "type": "TIMESTAMPTZ", "default": "NOW()" }
+            },
+            "constraints": {
+                "primary_key": ["id"],
+                "check": { "chk_action": "action IN ('INSERT','UPDATE','DELETE','SELECT')" }
+            },
+            "indexes": {
+                "idx_audit_entity": { "columns": "entity_type, entity_id" },
+                "idx_audit_time": { "columns": "event_time", "type": "BRIN" },
+                "idx_audit_changes": { "columns": "changes", "type": "GIN" }
+            },
+            "comments": {
+                "table": "Append-only audit trail"
+            }
+        },
+
+        "user_backup": {
+            "columns": {
+                "backup_id": { "type": "BIGSERIAL" },
+                "taken_at": { "type": "TIMESTAMPTZ", "default": "NOW()" }
+            },
+            "like": { "table": "users", "options": "INCLUDING DEFAULTS INCLUDING STORAGE" },
+            "comments": {
+                "table": "Demonstrates CREATE TABLE ... LIKE users INCLUDING DEFAULTS"
+            }
+        },
+
+        "people": {
+            "columns": {
+                "id": { "type": "BIGSERIAL" },
+                "full_name": { "type": "VARCHAR(200)", "notnull": true },
+                "born_on": { "type": "DATE" }
             },
             "constraints": {
                 "primary_key": ["id"]
             },
             "comments": {
-                "table": "Stores category definitions"
+                "table": "Parent table for inheritance demo"
+            }
+        },
+
+        "employees": {
+            "columns": {
+                "hire_date": { "type": "DATE" },
+                "salary": { "type": "NUMERIC(12,2)" }
+            },
+            "constraints": {
+                "primary_key": ["id"]
+            },
+            "inherits": "people",
+            "indexes": {
+                "idx_employees_salary": "salary"
+            },
+            "comments": {
+                "table": "Child table that inherits people"
+            }
+        },
+
+        "session_stats": {
+            "table_options": { "unlogged": true },
+            "columns": {
+                "id": { "type": "BIGSERIAL" },
+                "user_id": { "type": "UUID" },
+                "started_at": { "type": "TIMESTAMPTZ", "default": "NOW()" },
+                "duration": { "type": "INTERVAL" }
+            },
+            "constraints": {
+                "primary_key": ["id"]
+            },
+            "comments": {
+                "table": "Demonstrates UNLOGGED table"
             }
         }
-    }
+    },
+
+    "views": {
+        "v_users_active": {
+            "query": "SELECT id, username, email, role FROM users WHERE role <> 'admin'",
+            "check_option": "CASCADED"
+        },
+        "v_order_totals": {
+            "query": "SELECT o.id, o.order_number, SUM(oi.line_total) AS total FROM orders o JOIN order_items oi ON oi.order_id = o.id GROUP BY o.id, o.order_number"
+        }
+    },
+
+    "materialized_views": {
+        "mv_product_sales": {
+            "query": "SELECT p.id, p.name, SUM(oi.qty) AS units_sold FROM products p JOIN order_items oi ON oi.product_id = p.id GROUP BY p.id, p.name",
+            "with": "fillfactor=100",
+            "tablespace": "pg_default",
+            "index": {
+                "idx_mv_product_sales_name": { "columns": "name" },
+                "idx_mv_product_sales_units": { "columns": "units_sold DESC" }
+            }
+        }
+    },
+
+    "functions": [
+        {
+            "name": "set_updated_at",
+            "args": "",
+            "returns": "trigger",
+            "language": "plpgsql",
+            "behavior": "VOLATILE",
+            "before_tables": true,
+            "body": "BEGIN\n    NEW.updated_at = NOW();\n    RETURN NEW;\nEND;"
+        },
+        {
+            "name": "get_user_count",
+            "args": "",
+            "returns": "BIGINT",
+            "language": "sql",
+            "behavior": "STABLE",
+            "body": "SELECT COUNT(*) FROM users;"
+        }
+    ]
 }
