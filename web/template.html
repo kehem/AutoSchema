@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AutoSchema Studio — JSON → PostgreSQL DDL</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%237c6cf6'/%3E%3Cpath d='M9 17h6l-2 9 10-13h-6l2-9z' fill='white'/%3E%3C/svg%3E">
+<style>
+/*__CSS__*/
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header>
+    <div class="brand">
+      <div class="brand-mark">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <ellipse cx="12" cy="5" rx="8" ry="3"/>
+          <path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/>
+          <path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/>
+        </svg>
+      </div>
+      <div>
+        <div class="brand-name">AutoSchema <em>Studio</em></div>
+        <div class="brand-sub">JSON → PostgreSQL DDL · runs 100% in your browser</div>
+      </div>
+    </div>
+    <div class="header-spacer"></div>
+    <div class="sel-wrap">
+      <select id="sample" title="Load an example schema">
+        <option value="full">Example · full feature set</option>
+        <option value="blog">Example · blog</option>
+        <option value="ecom">Example · e-commerce</option>
+        <option value="legacy">Example · legacy v1 format</option>
+      </select>
+    </div>
+    <button class="btn" id="btn-format" title="Pretty-print the JSON">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+      Format
+    </button>
+    <button class="btn btn-primary" id="btn-run" title="Generate SQL (Ctrl+Enter)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3l14 9-14 9V3z"/></svg>
+      Generate SQL
+    </button>
+    <span class="kbd-hint">press <kbd>Ctrl</kbd>+<kbd>Enter</kbd></span>
+  </header>
+
+  <main>
+    <!-- editor pane -->
+    <section class="panel">
+      <div class="panel-head">
+        <span class="panel-title"><span class="dot" id="json-dot"></span> schema.json</span>
+        <div class="head-spacer"></div>
+        <span style="font:11px var(--mono);color:var(--tx3)" id="json-label">JSON valid</span>
+      </div>
+      <div class="editor-body">
+        <div class="gutter" id="gutter"></div>
+        <div class="editor-wrap">
+          <textarea id="editor" spellcheck="false" autocomplete="off" autocapitalize="off" aria-label="JSON schema editor"></textarea>
+          <div class="editor-err" id="editor-err"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- output pane -->
+    <section class="panel">
+      <div class="panel-head">
+        <div class="tabs">
+          <button class="tab active" data-tab="sql">SQL Output <span class="count" id="tab-sql-count">0</span></button>
+          <button class="tab" data-tab="sugg">Suggested Code <span class="count" id="tab-sugg-count">0</span></button>
+        </div>
+        <div class="head-spacer"></div>
+        <button class="btn btn-icon" id="btn-copy" title="Copy SQL">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        </button>
+        <button class="btn btn-icon" id="btn-download" title="Download .sql">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+        </button>
+      </div>
+      <div class="out-body">
+        <div class="pane active" id="pane-sql">
+          <pre class="code" id="sql-out"></pre>
+        </div>
+        <div class="pane" id="pane-sugg">
+          <div class="filters">
+            <button class="filter active" data-filter="all">All</button>
+            <button class="filter" data-filter="usage">Usage snippets</button>
+            <button class="filter" data-filter="tip">Recommendations</button>
+          </div>
+          <div class="sugg-list" id="sugg-list"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div class="statusbar">
+    <span class="status-json"><span class="pulse ok" id="status-pulse"></span> engine: pure JS port of schema.c</span>
+    <span class="chip">tables <b id="st-tables">0</b></span>
+    <span class="chip">columns <b id="st-columns">0</b></span>
+    <span class="chip">indexes <b id="st-indexes">0</b></span>
+    <span class="chip">foreign keys <b id="st-fks">0</b></span>
+    <span class="chip">triggers <b id="st-triggers">0</b></span>
+    <span class="chip">policies <b id="st-policies">0</b></span>
+    <span class="chip">enums <b id="st-enums">0</b></span>
+    <span class="chip">domains <b id="st-domains">0</b></span>
+    <span class="chip">views <b id="st-views">0</b></span>
+  </div>
+
+  <footer>
+    AutoSchema Studio — a browser port of
+    <a href="https://github.com/kehem/AutoSchema" target="_blank" rel="noopener">github.com/kehem/AutoSchema</a>
+    · generated DDL validated on PostgreSQL 17 · no data ever leaves your device
+  </footer>
+</div>
+
+<div id="toast"><span class="t-ico"></span><span class="t-msg"></span></div>
+
+<script>
+/*__GENERATOR__*/
+</script>
+<script>
+/*__UI__*/
+</script>
+</body>
+</html>

@@ -41,6 +41,23 @@ static int json_bool_opt(const json_t *obj, const char *key, int fallback) {
     return fallback;
 }
 
+/* replace all occurrences of 'from' with 'to' in src → dst */
+static void substitute_all(const char *src, const char *from, const char *to,
+                           char *dst, size_t sz) {
+    size_t flen = strlen(from);
+    size_t j = 0;
+    for (size_t i = 0; src[i] && j < sz - 1; ) {
+        if (strncmp(src + i, from, flen) == 0) {
+            size_t tlen = strlen(to);
+            for (size_t k = 0; k < tlen && j < sz - 1; k++) dst[j++] = to[k];
+            i += flen;
+        } else {
+            dst[j++] = src[i++];
+        }
+    }
+    dst[j] = '\0';
+}
+
 static void escape_quotes(const char *src, char *dst, size_t sz) {
     size_t j = 0;
     for (size_t i = 0; src[i] && j < sz - 3; i++) {
@@ -141,6 +158,10 @@ static void map_type(const char *raw, char *out, size_t outsz) {
     else if (strcmp(upper, "DATERANGE") == 0) strcpy(pg, "DATERANGE");
     else if (strncmp(upper, "BIT", 3) == 0) strcpy(pg, buf);
     else if (strcmp(upper, "OID") == 0) strcpy(pg, "OID");
+    else if (strcmp(upper, "FILE") == 0 || strcmp(upper, "IMAGE") == 0 ||
+             strcmp(upper, "PDF") == 0 || strcmp(upper, "DOCUMENT") == 0 ||
+             strcmp(upper, "VIDEO") == 0 || strcmp(upper, "AUDIO") == 0)
+        strcpy(pg, "TEXT"); /* file types stored as TEXT (paths) */
     else if (strcmp(upper, "REGPROC") == 0 ||
              strcmp(upper, "REGPROCEDURE") == 0 ||
              strcmp(upper, "REGOPER") == 0 ||
@@ -162,6 +183,7 @@ static void map_type(const char *raw, char *out, size_t outsz) {
 
 typedef struct {
     char type[MAX_TYPE];
+    char file_type[MAX_TYPE];       /* FILE/IMAGE/PDF/... if column is a file type */
     char default_expr[MAX_EXPR];
     char collation[MAX_TYPE];
     char compression[MAX_TYPE];
@@ -201,7 +223,7 @@ static void parse_col_str(const char *str, ColumnDef *def) {
             j++;
         }
         expr[k] = '\0';
-        def->type[0] = '\0'; /* type inferred from expression */
+        snprintf(def->type, sizeof(def->type), "TEXT"); /* PG requires a data type */
         snprintf(def->generated_expr, sizeof(def->generated_expr),
                  "ALWAYS AS (%s) STORED", expr);
         def->notnull = 1;
@@ -286,6 +308,19 @@ static void parse_col_str(const char *str, ColumnDef *def) {
         }
     }
 
+    /* detect file types (for the companion mime_type column) before mapping */
+    def->file_type[0] = '\0';
+    {
+        char fu[MAX_TYPE];
+        size_t flen = strlen(type_part);
+        for (size_t i = 0; i <= flen; i++) fu[i] = toupper((unsigned char)type_part[i]);
+        char *fb = strstr(fu, "[]"); if (fb) *fb = '\0';
+        if (strcmp(fu, "FILE") == 0 || strcmp(fu, "IMAGE") == 0 ||
+            strcmp(fu, "PDF") == 0 || strcmp(fu, "DOCUMENT") == 0 ||
+            strcmp(fu, "VIDEO") == 0 || strcmp(fu, "AUDIO") == 0)
+            snprintf(def->file_type, sizeof(def->file_type), "%s", fu);
+    }
+
     map_type(type_part, def->type, sizeof(def->type));
     if (def->type[0] == '\0')
         snprintf(def->type, sizeof(def->type), "%s", type_part);
@@ -296,6 +331,17 @@ static void parse_col_obj(const json_t *obj, ColumnDef *def) {
     memset(def, 0, sizeof(*def));
     char raw_type[MAX_TYPE] = "TEXT";
     json_str_opt(obj, "type", raw_type, sizeof(raw_type), "TEXT");
+    /* detect file types before mapping */
+    {
+        char fu[MAX_TYPE];
+        size_t flen = strlen(raw_type);
+        for (size_t i = 0; i <= flen; i++) fu[i] = toupper((unsigned char)raw_type[i]);
+        char *fb = strstr(fu, "[]"); if (fb) *fb = '\0';
+        if (strcmp(fu, "FILE") == 0 || strcmp(fu, "IMAGE") == 0 ||
+            strcmp(fu, "PDF") == 0 || strcmp(fu, "DOCUMENT") == 0 ||
+            strcmp(fu, "VIDEO") == 0 || strcmp(fu, "AUDIO") == 0)
+            snprintf(def->file_type, sizeof(def->file_type), "%s", fu);
+    }
     map_type(raw_type, def->type, sizeof(def->type));
 
     json_str_opt(obj, "default", def->default_expr, sizeof(def->default_expr), "");
@@ -365,7 +411,7 @@ static void print_col(const char *name, const ColumnDef *def,
                       const char *schema, const char *table) {
     printf("    %s", qi(name));
     if (def->generated_expr[0]) {
-        if (def->type[0]) printf(" %s", def->type);
+        printf(" %s", def->type[0] ? def->type : "TEXT"); /* PG requires a data type */
         if (strncmp(def->generated_expr, "GENERATED", 9) != 0)
             printf(" GENERATED");
         printf(" %s", def->generated_expr);
@@ -469,15 +515,22 @@ static void generate_table(const char *schema, const char *tname, const json_t *
         /* File-type columns get a companion mime_type column + CHECK */
         {
             char upper[MAX_TYPE];
-            for (size_t i = 0; i < strlen(def.type); i++)
-                upper[i] = toupper((unsigned char)def.type[i]);
-            upper[strlen(def.type)] = '\0';
+            if (def.file_type[0]) {
+                snprintf(upper, sizeof(upper), "%s", def.file_type);
+            } else {
+                for (size_t i = 0; i < strlen(def.type); i++)
+                    upper[i] = toupper((unsigned char)def.type[i]);
+                upper[strlen(def.type)] = '\0';
+            }
             const char *mime_check = file_mime_check(upper);
             if (mime_check && !def.generated_expr[0]) {
                 char mime_col[MAX_STR];
+                char check_expr[MAX_EXPR];
                 snprintf(mime_col, sizeof(mime_col), "%s_mime_type", cname);
+                /* the CHECK must reference the actual companion column */
+                substitute_all(mime_check, "mime_type", mime_col, check_expr, sizeof(check_expr));
                 printf(",\n    %s VARCHAR(100)", qi(mime_col));
-                printf(",\n    CHECK (%s IS NULL OR (%s))", qi(mime_col), mime_check);
+                printf(",\n    CHECK (%s IS NULL OR (%s))", qi(mime_col), check_expr);
             }
         }
     }

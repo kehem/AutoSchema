@@ -2,6 +2,33 @@
 
 **AutoSchema v2** generates complete PostgreSQL DDL from a JSON schema file (`schema.json`). It covers nearly every PostgreSQL feature — from simple `VARCHAR` columns to partitioning, inheritance, row-level security, and triggers — so your schema definition stays in one readable JSON file.
 
+## 🌐 AutoSchema Studio (web)
+
+There is also a **pure HTML + CSS + JavaScript** web version — `web/index.html` (self-contained, no dependencies, runs 100% in the browser, nothing leaves your device):
+
+- **JSON → SQL live converter** — paste/edit a schema and hit **Generate SQL** (or `Ctrl+Enter`)
+- **Suggested code** — auto-generated sample `INSERT`/`SELECT`/`JOIN` queries per table, plus best-practice recommendations (missing FK indexes, `updated_at` triggers, etc.)
+- Syntax-highlighted SQL output, copy & download (`.sql`)
+- Four built-in examples: full feature set, blog, e-commerce, and the legacy v1 string format
+- Stats bar (tables / columns / indexes / FKs / triggers / policies / enums / domains / views)
+
+Open `web/index.html` directly in any browser, or serve it:
+
+```bash
+cd web
+python3 -m http.server 8080
+# → http://localhost:8080
+```
+
+To rebuild `index.html` from the sources (`generator.js` engine, `ui.js`, `style.css`, `template.html`):
+
+```bash
+cd web
+python3 build.py
+```
+
+The JS engine (`web/generator.js`) is a faithful port of `schema.c`; its output is validated against PostgreSQL 17.
+
 ## Features
 
 ### Object types generated

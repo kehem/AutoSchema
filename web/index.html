@@ -1,0 +1,2195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AutoSchema Studio — JSON → PostgreSQL DDL</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%237c6cf6'/%3E%3Cpath d='M9 17h6l-2 9 10-13h-6l2-9z' fill='white'/%3E%3C/svg%3E">
+<style>
+/* =====================================================================
+   AutoSchema Studio — styles
+   Minimal, dark, glassy. No external resources.
+   ===================================================================== */
+
+:root {
+  --bg0: #07090f;
+  --bg1: #0b0e17;
+  --bg2: #111527;
+  --bg3: #181d33;
+  --line: rgba(148, 163, 184, 0.13);
+  --line2: rgba(148, 163, 184, 0.22);
+  --tx: #e7ebf4;
+  --tx2: #a3adc4;
+  --tx3: #66718c;
+  --acc: #7c6cf6;
+  --acc2: #4f8cff;
+  --cyan: #22d3ee;
+  --ok: #34d399;
+  --warn: #fbbf24;
+  --err: #f87171;
+  --violet: #a78bfa;
+  --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body { height: 100%; }
+
+body {
+  font-family: var(--font);
+  background: var(--bg0);
+  color: var(--tx);
+  min-height: 100vh;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ambient background */
+body::before {
+  content: "";
+  position: fixed; inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(900px 500px at 12% -8%, rgba(124, 108, 246, 0.16), transparent 60%),
+    radial-gradient(800px 480px at 92% -4%, rgba(34, 211, 238, 0.10), transparent 60%),
+    radial-gradient(700px 700px at 50% 120%, rgba(79, 140, 255, 0.08), transparent 60%);
+  z-index: 0;
+}
+body::after {
+  content: "";
+  position: fixed; inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(148,163,184,0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148,163,184,0.035) 1px, transparent 1px);
+  background-size: 34px 34px;
+  mask-image: radial-gradient(ellipse 90% 70% at 50% 0%, #000 30%, transparent 78%);
+  z-index: 0;
+}
+
+.app { position: relative; z-index: 1; display: flex; flex-direction: column; min-height: 100vh; }
+
+/* ---------------- header ---------------- */
+
+header {
+  display: flex; align-items: center; gap: 14px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(11, 14, 23, 0.75);
+  backdrop-filter: blur(10px);
+  position: sticky; top: 0; z-index: 20;
+}
+
+.brand { display: flex; align-items: center; gap: 11px; min-width: 0; }
+.brand-mark {
+  width: 36px; height: 36px; flex: none;
+  border-radius: 10px;
+  display: grid; place-items: center;
+  background: linear-gradient(135deg, var(--acc) 0%, var(--acc2) 100%);
+  box-shadow: 0 6px 18px rgba(124, 108, 246, 0.4);
+}
+.brand-name { font-weight: 700; font-size: 15px; letter-spacing: 0.2px; white-space: nowrap; }
+.brand-name em { font-style: normal; background: linear-gradient(90deg, var(--violet), var(--cyan)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.brand-sub { font-size: 11px; color: var(--tx3); white-space: nowrap; }
+
+.header-spacer { flex: 1; }
+
+.sel-wrap { position: relative; }
+.sel-wrap select {
+  appearance: none; -webkit-appearance: none;
+  background: var(--bg2);
+  border: 1px solid var(--line2);
+  color: var(--tx2);
+  font: 500 12.5px var(--font);
+  padding: 8px 30px 8px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  outline: none;
+  transition: border-color .15s, color .15s;
+}
+.sel-wrap select:hover { border-color: rgba(124,108,246,.5); color: var(--tx); }
+.sel-wrap::after {
+  content: ""; position: absolute; right: 12px; top: 50%;
+  width: 7px; height: 7px; transform: translateY(-70%) rotate(45deg);
+  border-right: 1.5px solid var(--tx3); border-bottom: 1.5px solid var(--tx3);
+  pointer-events: none;
+}
+
+.btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  font: 600 12.5px var(--font);
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--line2);
+  background: var(--bg2);
+  color: var(--tx2);
+  cursor: pointer;
+  transition: transform .12s, border-color .15s, color .15s, background .15s, box-shadow .15s;
+  white-space: nowrap;
+}
+.btn:hover { color: var(--tx); border-color: rgba(124,108,246,.55); background: var(--bg3); }
+.btn:active { transform: translateY(1px); }
+.btn svg { width: 15px; height: 15px; }
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--acc) 0%, var(--acc2) 100%);
+  border: none; color: #fff;
+  box-shadow: 0 8px 22px rgba(110, 100, 240, 0.35);
+  padding: 9px 18px;
+}
+.btn-primary:hover { filter: brightness(1.08); color: #fff; border: none; background: linear-gradient(135deg, var(--acc), var(--acc2)); }
+.btn-primary:active { transform: translateY(1px); }
+
+.btn-icon { padding: 8px 10px; }
+
+.kbd-hint { font-size: 11px; color: var(--tx3); margin-right: 2px; white-space: nowrap; }
+.kbd-hint kbd {
+  font-family: var(--mono); font-size: 10.5px;
+  background: var(--bg2); border: 1px solid var(--line2); border-bottom-width: 2px;
+  border-radius: 5px; padding: 1px 5px; color: var(--tx2);
+}
+
+/* ---------------- main layout ---------------- */
+
+main {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+  gap: 14px;
+  padding: 16px 18px 10px;
+  min-height: 0;
+}
+
+.panel {
+  background: rgba(17, 21, 39, 0.72);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: hidden;
+  display: flex; flex-direction: column;
+  min-height: 0;
+  backdrop-filter: blur(6px);
+}
+
+.panel-head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(24, 29, 51, 0.5);
+}
+.panel-title { font-size: 12px; font-weight: 600; letter-spacing: .6px; text-transform: uppercase; color: var(--tx3); display:flex; align-items:center; gap:8px; }
+.panel-title .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--tx3); transition: background .2s; }
+.panel-title .dot.ok { background: var(--ok); box-shadow: 0 0 8px rgba(52,211,153,.7); }
+.panel-title .dot.err { background: var(--err); box-shadow: 0 0 8px rgba(248,113,113,.7); }
+.head-spacer { flex: 1; }
+
+/* ---------------- editor pane ---------------- */
+
+.editor-body { flex: 1; display: flex; min-height: 0; position: relative; }
+
+.gutter {
+  width: 46px; flex: none;
+  padding: 14px 10px 14px 0;
+  text-align: right;
+  font: 12px/1.7 var(--mono);
+  color: var(--tx3);
+  border-right: 1px solid var(--line);
+  background: rgba(7, 9, 15, 0.4);
+  overflow: hidden;
+  user-select: none;
+}
+.gutter div { white-space: pre; }
+
+.editor-wrap { flex: 1; position: relative; min-width: 0; }
+
+#editor {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  padding: 14px 16px;
+  border: none; outline: none; resize: none;
+  background: transparent;
+  color: var(--tx);
+  font: 12.5px/1.7 var(--mono);
+  caret-color: var(--acc);
+  tab-size: 4;
+  white-space: pre;
+  overflow: auto;
+}
+#editor::selection { background: rgba(124,108,246,.28); }
+
+.editor-err {
+  display: none;
+  position: absolute; left: 12px; right: 12px; bottom: 12px;
+  padding: 9px 12px;
+  border: 1px solid rgba(248,113,113,.4);
+  background: rgba(127,29,29,.35);
+  color: #fecaca;
+  font: 12px var(--mono);
+  border-radius: 10px;
+  backdrop-filter: blur(6px);
+}
+.editor-err.show { display: block; }
+
+/* ---------------- output pane ---------------- */
+
+.tabs { display: flex; gap: 4px; }
+.tab {
+  font: 600 12.5px var(--font);
+  color: var(--tx3);
+  padding: 7px 14px;
+  border-radius: 9px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: color .15s, background .15s;
+  background: none;
+}
+.tab:hover { color: var(--tx2); }
+.tab.active {
+  color: var(--tx);
+  background: var(--bg3);
+  border-color: var(--line2);
+}
+.tab .count {
+  margin-left: 6px;
+  font-size: 10.5px;
+  font-family: var(--mono);
+  color: var(--tx3);
+  background: rgba(148,163,184,.12);
+  padding: 1px 6px; border-radius: 20px;
+}
+
+.out-body { flex: 1; min-height: 0; overflow: auto; background: rgba(7,9,15,.45); }
+.pane { display: none; height: 100%; }
+.pane.active { display: block; }
+.pane#pane-sugg { display: none; flex-direction: column; }
+.pane#pane-sugg.active { display: flex; }
+#sugg-list { flex: 1; overflow: auto; }
+
+pre.code {
+  padding: 14px 16px;
+  font: 12.5px/1.7 var(--mono);
+  color: var(--tx);
+  white-space: pre;
+  tab-size: 4;
+}
+pre.code .tok-cm  { color: #5b6b82; font-style: italic; }
+pre.code .tok-kw  { color: #b7a8ff; }
+pre.code .tok-str { color: #7ee2a8; }
+pre.code .tok-num { color: #ff9e9e; }
+pre.code .tok-fn  { color: #67c8ff; }
+pre.code .tok-op  { color: #93a3c0; }
+pre.code .tok-typ { color: #f2a9ff; }
+pre.code .tok-cte { color: #ffd479; }
+
+/* suggested cards */
+.sugg-list { padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
+.sugg-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(24, 29, 51, 0.55);
+  overflow: hidden;
+}
+.sugg-card-head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(24,29,51,.6);
+}
+.sugg-ico {
+  width: 26px; height: 26px; flex: none; border-radius: 8px;
+  display: grid; place-items: center;
+  font-size: 13px;
+}
+.sugg-ico.usage { background: rgba(52,211,153,.14); color: var(--ok); }
+.sugg-ico.tip   { background: rgba(251,191,36,.14); color: var(--warn); }
+.sugg-title { font-size: 13px; font-weight: 650; color: var(--tx); }
+.sugg-desc { font-size: 12px; color: var(--tx3); margin-top: 1px; }
+.sugg-body { padding: 10px 12px 12px; }
+.sugg-body pre.code { padding: 0 0 8px; }
+.sugg-code {
+  background: rgba(7,9,15,.6);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font: 12px/1.65 var(--mono);
+  color: var(--tx);
+  white-space: pre; overflow-x: auto;
+}
+.sugg-foot { display: flex; justify-content: flex-end; margin-top: 8px; }
+
+.filters { display: flex; gap: 6px; padding: 10px 16px 0; flex-wrap: wrap; }
+.filter {
+  font: 600 11.5px var(--font);
+  color: var(--tx3);
+  padding: 5px 12px; border-radius: 20px;
+  border: 1px solid var(--line2);
+  background: transparent; cursor: pointer;
+  transition: all .15s;
+}
+.filter:hover { color: var(--tx2); }
+.filter.active { color: #fff; background: linear-gradient(135deg, var(--acc), var(--acc2)); border-color: transparent; }
+
+.empty {
+  padding: 40px 20px; text-align: center; color: var(--tx3); font-size: 13px;
+  display: grid; place-items: center; min-height: 60%;
+}
+.empty svg { width: 40px; height: 40px; opacity: .5; margin-bottom: 10px; }
+
+/* ---------------- status bar ---------------- */
+
+.statusbar {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 9px 18px;
+  border-top: 1px solid var(--line);
+  background: rgba(11, 14, 23, 0.7);
+  backdrop-filter: blur(8px);
+  font-size: 11.5px; color: var(--tx3);
+}
+.chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: var(--bg2);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 3px 10px;
+  font: 600 11px var(--mono);
+  color: var(--tx2);
+}
+.chip b { color: var(--tx); font-weight: 700; }
+.chip .c-acc { color: var(--violet); }
+.chip .c-ok  { color: var(--ok); }
+.chip .c-cy  { color: var(--cyan); }
+.status-json { margin-right: auto; display: inline-flex; align-items: center; gap: 6px; }
+.pulse { width: 7px; height: 7px; border-radius: 50%; background: var(--tx3); }
+.pulse.ok { background: var(--ok); box-shadow: 0 0 7px rgba(52,211,153,.8); }
+.pulse.err { background: var(--err); box-shadow: 0 0 7px rgba(248,113,113,.8); }
+
+footer { text-align: center; padding: 12px; font-size: 11.5px; color: var(--tx3); }
+footer a { color: var(--tx2); text-decoration: none; border-bottom: 1px dotted var(--tx3); }
+footer a:hover { color: var(--violet); }
+
+/* ---------------- toast ---------------- */
+
+#toast {
+  position: fixed; left: 50%; bottom: 26px;
+  transform: translateX(-50%) translateY(20px);
+  background: rgba(24, 29, 51, 0.95);
+  border: 1px solid var(--line2);
+  color: var(--tx);
+  font: 600 12.5px var(--font);
+  padding: 10px 18px;
+  border-radius: 12px;
+  opacity: 0; pointer-events: none;
+  transition: opacity .22s, transform .22s;
+  box-shadow: 0 12px 40px rgba(0,0,0,.5);
+  z-index: 60;
+  display: flex; align-items: center; gap: 9px;
+}
+#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+#toast.ok  { border-color: rgba(52,211,153,.5); }
+#toast.err { border-color: rgba(248,113,113,.5); }
+#toast .t-ico { font-size: 14px; }
+
+/* scrollbars */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(148,163,184,.18); border-radius: 8px; border: 2px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-thumb:hover { background: rgba(148,163,184,.32); border: 2px solid transparent; background-clip: content-box; }
+
+/* responsive */
+@media (max-width: 960px) {
+  main { grid-template-columns: 1fr; }
+  .app { min-height: 100vh; }
+  main { min-height: 0; }
+  .editor-body, .out-body { min-height: 46vh; }
+  .kbd-hint { display: none; }
+}
+
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header>
+    <div class="brand">
+      <div class="brand-mark">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <ellipse cx="12" cy="5" rx="8" ry="3"/>
+          <path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/>
+          <path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/>
+        </svg>
+      </div>
+      <div>
+        <div class="brand-name">AutoSchema <em>Studio</em></div>
+        <div class="brand-sub">JSON → PostgreSQL DDL · runs 100% in your browser</div>
+      </div>
+    </div>
+    <div class="header-spacer"></div>
+    <div class="sel-wrap">
+      <select id="sample" title="Load an example schema">
+        <option value="full">Example · full feature set</option>
+        <option value="blog">Example · blog</option>
+        <option value="ecom">Example · e-commerce</option>
+        <option value="legacy">Example · legacy v1 format</option>
+      </select>
+    </div>
+    <button class="btn" id="btn-format" title="Pretty-print the JSON">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+      Format
+    </button>
+    <button class="btn btn-primary" id="btn-run" title="Generate SQL (Ctrl+Enter)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3l14 9-14 9V3z"/></svg>
+      Generate SQL
+    </button>
+    <span class="kbd-hint">press <kbd>Ctrl</kbd>+<kbd>Enter</kbd></span>
+  </header>
+
+  <main>
+    <!-- editor pane -->
+    <section class="panel">
+      <div class="panel-head">
+        <span class="panel-title"><span class="dot" id="json-dot"></span> schema.json</span>
+        <div class="head-spacer"></div>
+        <span style="font:11px var(--mono);color:var(--tx3)" id="json-label">JSON valid</span>
+      </div>
+      <div class="editor-body">
+        <div class="gutter" id="gutter"></div>
+        <div class="editor-wrap">
+          <textarea id="editor" spellcheck="false" autocomplete="off" autocapitalize="off" aria-label="JSON schema editor"></textarea>
+          <div class="editor-err" id="editor-err"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- output pane -->
+    <section class="panel">
+      <div class="panel-head">
+        <div class="tabs">
+          <button class="tab active" data-tab="sql">SQL Output <span class="count" id="tab-sql-count">0</span></button>
+          <button class="tab" data-tab="sugg">Suggested Code <span class="count" id="tab-sugg-count">0</span></button>
+        </div>
+        <div class="head-spacer"></div>
+        <button class="btn btn-icon" id="btn-copy" title="Copy SQL">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        </button>
+        <button class="btn btn-icon" id="btn-download" title="Download .sql">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+        </button>
+      </div>
+      <div class="out-body">
+        <div class="pane active" id="pane-sql">
+          <pre class="code" id="sql-out"></pre>
+        </div>
+        <div class="pane" id="pane-sugg">
+          <div class="filters">
+            <button class="filter active" data-filter="all">All</button>
+            <button class="filter" data-filter="usage">Usage snippets</button>
+            <button class="filter" data-filter="tip">Recommendations</button>
+          </div>
+          <div class="sugg-list" id="sugg-list"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div class="statusbar">
+    <span class="status-json"><span class="pulse ok" id="status-pulse"></span> engine: pure JS port of schema.c</span>
+    <span class="chip">tables <b id="st-tables">0</b></span>
+    <span class="chip">columns <b id="st-columns">0</b></span>
+    <span class="chip">indexes <b id="st-indexes">0</b></span>
+    <span class="chip">foreign keys <b id="st-fks">0</b></span>
+    <span class="chip">triggers <b id="st-triggers">0</b></span>
+    <span class="chip">policies <b id="st-policies">0</b></span>
+    <span class="chip">enums <b id="st-enums">0</b></span>
+    <span class="chip">domains <b id="st-domains">0</b></span>
+    <span class="chip">views <b id="st-views">0</b></span>
+  </div>
+
+  <footer>
+    AutoSchema Studio — a browser port of
+    <a href="https://github.com/kehem/AutoSchema" target="_blank" rel="noopener">github.com/kehem/AutoSchema</a>
+    · generated DDL validated on PostgreSQL 17 · no data ever leaves your device
+  </footer>
+</div>
+
+<div id="toast"><span class="t-ico"></span><span class="t-msg"></span></div>
+
+<script>
+/* =====================================================================
+ * AutoSchema Studio — JSON → PostgreSQL DDL engine
+ * Pure JavaScript port of the AutoSchema v2 C generator (schema.c).
+ * No dependencies. Runs fully in the browser.
+ * ===================================================================== */
+
+/* ---------- helpers ---------- */
+
+function qi(id) {
+  if (!id) return '';
+  if (id[0] === '"') return id;
+  return /^[a-z_][a-z0-9_]*$/.test(id) ? id : '"' + id + '"';
+}
+
+function esc(s) {
+  return String(s).replace(/'/g, "''");
+}
+
+/* ---------- type mapping (mirrors map_type in schema.c) ---------- */
+
+function mapType(raw) {
+  let buf = String(raw).trim();
+  let upper = buf.toUpperCase();
+
+  let isArr = false;
+  const br = upper.indexOf('[]');
+  if (br !== -1) { isArr = true; buf = buf.slice(0, br).trim(); upper = buf.toUpperCase(); }
+
+  let pg = '';
+  const U = upper;
+
+  if      (U === 'INT' || U === 'INTEGER')                  pg = 'INTEGER';
+  else if (U === 'BIGINT')                                  pg = 'BIGINT';
+  else if (U === 'SMALLINT')                                pg = 'SMALLINT';
+  else if (U === 'SERIAL')                                  pg = 'SERIAL';
+  else if (U === 'BIGSERIAL')                               pg = 'BIGSERIAL';
+  else if (U === 'SMALLSERIAL')                             pg = 'SMALLSERIAL';
+  else if (U === 'BOOLEAN' || U === 'BOOL')                 pg = 'BOOLEAN';
+  else if (U === 'REAL' || U === 'FLOAT4')                  pg = 'REAL';
+  else if (U === 'DOUBLE' || U === 'FLOAT8')                pg = 'DOUBLE PRECISION';
+  else if (U === 'FLOAT')                                   pg = 'FLOAT';
+  else if (U === 'MONEY')                                   pg = 'MONEY';
+  else if (U === 'NUMERIC' || U === 'DECIMAL')              pg = buf.includes('(') ? buf : 'NUMERIC';
+  else if (U === 'TEXT')                                    pg = 'TEXT';
+  else if (U === 'CITEXT')                                  pg = 'CITEXT';
+  else if (U.startsWith('VARCHAR') || U.startsWith('CHARACTER VARYING')) pg = buf;
+  else if (U.startsWith('CHAR'))                            pg = buf;
+  else if (U === 'BYTEA')                                   pg = 'BYTEA';
+  else if (U === 'DATE')                                    pg = 'DATE';
+  else if (U === 'TIME')                                    pg = 'TIME';
+  else if (U === 'TIMETZ')                                  pg = 'TIMETZ';
+  else if (U === 'DATETIME')                                pg = 'TIMESTAMP';
+  else if (U === 'TIMESTAMP')                               pg = 'TIMESTAMP';
+  else if (U === 'TIMESTAMPTZ' || U.includes('TIMESTAMP WITH TIME ZONE')) pg = 'TIMESTAMP WITH TIME ZONE';
+  else if (U === 'INTERVAL')                                pg = 'INTERVAL';
+  else if (U === 'INET')                                    pg = 'INET';
+  else if (U === 'CIDR')                                    pg = 'CIDR';
+  else if (U === 'MACADDR')                                 pg = 'MACADDR';
+  else if (U === 'MACADDR8')                                pg = 'MACADDR8';
+  else if (U === 'UUID')                                    pg = 'UUID';
+  else if (U === 'XML')                                     pg = 'XML';
+  else if (U === 'JSON')                                    pg = 'JSON';
+  else if (U === 'JSONB')                                   pg = 'JSONB';
+  else if (U === 'POINT')                                   pg = 'POINT';
+  else if (U === 'LINE')                                    pg = 'LINE';
+  else if (U === 'LSEG')                                    pg = 'LSEG';
+  else if (U === 'BOX')                                     pg = 'BOX';
+  else if (U === 'PATH')                                    pg = 'PATH';
+  else if (U === 'POLYGON')                                 pg = 'POLYGON';
+  else if (U === 'CIRCLE')                                  pg = 'CIRCLE';
+  else if (U === 'TSVECTOR')                                pg = 'TSVECTOR';
+  else if (U === 'TSQUERY')                                 pg = 'TSQUERY';
+  else if (U === 'INT4RANGE')                               pg = 'INT4RANGE';
+  else if (U === 'INT8RANGE')                               pg = 'INT8RANGE';
+  else if (U === 'NUMRANGE')                                pg = 'NUMRANGE';
+  else if (U === 'TSRANGE')                                 pg = 'TSRANGE';
+  else if (U === 'TSTZRANGE')                               pg = 'TSTZRANGE';
+  else if (U === 'DATERANGE')                               pg = 'DATERANGE';
+  else if (U.startsWith('BIT'))                             pg = buf;
+  else if (U === 'OID')                                     pg = 'OID';
+  else if (['REGPROC','REGPROCEDURE','REGOPER','REGOPERATOR','REGCLASS',
+            'REGCONFIG','REGDICTIONARY','REGNAMESPACE'].includes(U)) pg = buf;
+  /* file types → TEXT (with companion mime_type column + CHECK) */
+  else if (['FILE','IMAGE','PDF','DOCUMENT','VIDEO','AUDIO'].includes(U)) pg = 'TEXT';
+  else pg = buf; /* enum, domain, or custom type */
+
+  if (isArr) pg += '[]';
+  return pg;
+}
+
+/* MIME CHECK expression for file types, or null */
+function fileMimeCheck(typeUpper) {
+  switch (typeUpper) {
+    case 'FILE':     return "mime_type ~ '^(application|audio|image|text|video)/[a-z0-9.+-]+$'";
+    case 'IMAGE':    return "mime_type IN ('image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml', 'image/bmp', 'image/tiff')";
+    case 'PDF':      return "mime_type = 'application/pdf'";
+    case 'DOCUMENT': return "mime_type IN ('application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain', 'application/pdf', 'application/vnd.oasis.opendocument.text')";
+    case 'VIDEO':    return "mime_type IN ('video/mp4', 'video/webm', 'video/ogg', 'video/x-msvideo', 'video/quicktime')";
+    case 'AUDIO':    return "mime_type IN ('audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/mp4', 'audio/x-aiff')";
+    default:         return null;
+  }
+}
+
+/* ---------- column parsing ---------- */
+
+function newDef() {
+  return { type: '', file_type: '', default: '', collation: '', compression: '', check: '',
+           comment: '', generated: '', identity_type: '', identity_opts: '',
+           ref_table: '', ref_column: '', ref_ondelete: '', ref_onupdate: '',
+           ref_deferrable: '', ref_initially: '',
+           notnull: false, unique: false, primary_key: false, is_foreign: false };
+}
+
+/* returns uppercase file-type name (IMAGE/PDF/...) or '' */
+function fileTypeName(raw) {
+  const u = String(raw).trim().toUpperCase().replace(/\[\]$/, '');
+  return ['FILE', 'IMAGE', 'PDF', 'DOCUMENT', 'VIDEO', 'AUDIO'].includes(u) ? u : '';
+}
+
+function findModifierComma(buf) {
+  /* comma outside parens */
+  let depth = 0;
+  for (let i = 0; i < buf.length; i++) {
+    const c = buf[i];
+    if (c === '(') depth++;
+    else if (c === ')') depth--;
+    else if (c === ',' && depth === 0) return i;
+  }
+  /* legacy: comma inside parens with trailing ')' */
+  if (buf.endsWith(')')) {
+    depth = 0;
+    for (let i = buf.length - 1; i >= 0; i--) {
+      const c = buf[i];
+      if (c === ')') depth++;
+      else if (c === '(') depth--;
+      else if (c === ',' && depth === 1) return i;
+    }
+  }
+  return null;
+}
+
+function parseColStr(str) {
+  const def = newDef();
+  let buf = String(str).trim();
+
+  /* Generated(expr) */
+  if (buf.startsWith('Generated(')) {
+    let depth = 1, j = 10, expr = '';
+    while (j < buf.length && depth > 0) {
+      const c = buf[j];
+      if (c === '(') depth++;
+      else if (c === ')') depth--;
+      if (depth > 0) expr += c;
+      j++;
+    }
+    def.generated = 'ALWAYS AS (' + expr + ') STORED';
+    def.notnull = true;
+    return def;
+  }
+
+  /* Foreign(table) [ON DELETE ...] [ON UPDATE ...] */
+  if (buf.startsWith('Foreign(')) {
+    const inner = buf.slice(8, buf.lastIndexOf(')'));
+    const m = inner.match(/^(\S+)(?:\s+ON\s+DELETE\s+(\S+))?(?:\s+ON\s+UPDATE\s+(\S+))?/);
+    def.type = 'INTEGER';
+    def.ref_table = m[1];
+    def.ref_column = 'id';
+    if (m[2]) def.ref_ondelete = m[2];
+    if (m[3]) def.ref_onupdate = m[3];
+    def.is_foreign = true;
+    return def;
+  }
+
+  /* Type [DEFAULT expr] */
+  let rawType;
+  const defPos = buf.indexOf(' DEFAULT ');
+  if (defPos !== -1) {
+    rawType = buf.slice(0, defPos).trim();
+    def.default = buf.slice(defPos + 9).trim();
+  } else {
+    const comma = findModifierComma(buf);
+    if (comma !== null) {
+      const mod = buf.slice(comma + 1).split(')')[0].trim().toLowerCase();
+      if (mod === 'notnull' || mod === 'unique') {
+        rawType = buf.slice(0, comma).trim();
+        if (rawType.includes('(') && !rawType.includes(')')) rawType += ')';
+        if (mod === 'notnull') def.notnull = true;
+        else def.unique = true;
+      } else {
+        rawType = buf;
+      }
+    } else {
+      rawType = buf;
+    }
+  }
+  def.type = mapType(rawType);
+  def.file_type = fileTypeName(rawType);
+  return def;
+}
+
+function parseColObj(obj) {
+  const def = newDef();
+  const rawType = String(obj.type || 'TEXT');
+  def.type = mapType(rawType);
+  def.file_type = fileTypeName(rawType);
+  def.default      = obj.default || '';
+  def.collation    = obj.collate || '';
+  def.compression  = obj.compression || '';
+  def.check        = obj.check || '';
+  def.comment      = obj.comment || '';
+  def.generated    = obj.generated || '';
+  def.notnull      = !!obj.notnull;
+  def.unique       = !!obj.unique;
+  def.primary_key  = !!obj.primary_key;
+
+  if (obj.identity && typeof obj.identity === 'object') {
+    def.identity_type = obj.identity.type || 'ALWAYS';
+    const opts = [];
+    if (obj.identity.start !== undefined) opts.push('START ' + obj.identity.start);
+    if (obj.identity.increment !== undefined) opts.push('INCREMENT ' + obj.identity.increment);
+    if (obj.identity.minvalue !== undefined) opts.push('MINVALUE ' + obj.identity.minvalue);
+    if (obj.identity.maxvalue !== undefined) opts.push('MAXVALUE ' + obj.identity.maxvalue);
+    if (obj.identity.cycle) opts.push('CYCLE');
+    def.identity_opts = opts.join(' ');
+  }
+
+  if (obj.references && typeof obj.references === 'object') {
+    def.ref_table       = obj.references.table || '';
+    def.ref_column      = obj.references.column || 'id';
+    def.ref_ondelete    = obj.references.ondelete || '';
+    def.ref_onupdate    = obj.references.onupdate || '';
+    def.ref_deferrable  = obj.references.deferrable || '';
+    def.ref_initially   = obj.references.initially || '';
+    def.is_foreign      = !!def.ref_table;
+  }
+  return def;
+}
+
+/* ---------- column printing ---------- */
+
+function printCol(name, def, schema, table) {
+  let s = '    ' + qi(name);
+  if (def.generated) {
+    s += ' ' + (def.type || 'TEXT'); /* PG requires a data type on generated columns */
+    if (!/^GENERATED/i.test(def.generated)) s += ' GENERATED';
+    s += ' ' + def.generated;
+    if (def.notnull) s += ' NOT NULL';
+    if (def.collation) s += ' COLLATE ' + def.collation;
+    if (def.comment) s += '  /* ' + def.comment + ' */';
+    return s;
+  }
+  if (def.identity_type) {
+    s += ' ' + def.type + ' GENERATED ' + def.identity_type + ' AS IDENTITY';
+    if (def.identity_opts) s += ' (' + def.identity_opts + ')';
+    if (def.collation) s += ' COLLATE ' + def.collation;
+    if (def.notnull) s += ' NOT NULL';
+    if (def.unique) s += ' UNIQUE';
+    if (def.primary_key) s += ' PRIMARY KEY';
+    if (def.default) s += ' DEFAULT ' + def.default;
+  } else {
+    s += ' ' + def.type;
+    if (def.collation) s += ' COLLATE ' + def.collation;
+    if (def.compression) s += ' COMPRESSION ' + def.compression;
+    if (def.default) s += ' DEFAULT ' + def.default;
+    if (def.notnull) s += ' NOT NULL';
+    if (def.unique) s += ' UNIQUE';
+    if (def.primary_key) s += ' PRIMARY KEY';
+    if (def.is_foreign) {
+      s += ' REFERENCES ' + qi(schema) + '.' + qi(def.ref_table) + '(' + qi(def.ref_column) + ')';
+      if (def.ref_ondelete) s += ' ON DELETE ' + def.ref_ondelete;
+      if (def.ref_onupdate) s += ' ON UPDATE ' + def.ref_onupdate;
+      if (def.ref_deferrable) {
+        s += (/^true$/i.test(def.ref_deferrable)) ? ' DEFERRABLE' : ' ' + def.ref_deferrable;
+      }
+      if (def.ref_initially) s += ' INITIALLY ' + def.ref_initially;
+    }
+    if (def.check) s += ' CHECK (' + def.check + ')';
+  }
+  if (def.comment) s += '  /* ' + def.comment + ' */';
+  return s;
+}
+
+function joinIds(arr) {
+  return arr.map(v => qi(String(v))).join(', ');
+}
+
+/* ---------- table generation ---------- */
+
+function generateTable(schema, tname, td) {
+  const L = [];
+  const columns = td.columns, cons = td.constraints, topts = td.table_options,
+        indexes = td.indexes, comments = td.comments, triggers = td.triggers,
+        policies = td.policies, inherit = td.inherits, like = td.like;
+
+  if (!columns || typeof columns !== 'object') {
+    return { sql: '-- table ' + tname + ' has no columns', tips: [], stats: {} };
+  }
+
+  let head = 'CREATE ';
+  if (topts) {
+    if (topts.unlogged) head += 'UNLOGGED ';
+    if (topts.temporary || topts.temp) head += 'TEMPORARY ';
+  }
+  head += 'TABLE IF NOT EXISTS ' + qi(schema) + '.' + qi(tname) + ' (';
+  L.push(head);
+
+  if (like && typeof like === 'object') {
+    const lt = like.table || '???';
+    L.push('    LIKE ' + qi(schema) + '.' + qi(lt) + (like.options ? ' ' + like.options : '') + ',');
+  }
+
+  /* columns */
+  const entries = Object.entries(columns);
+  let hasColPk = false;
+  const localCols = entries.map(([n]) => n);
+  const colLines = [];
+  for (const [cname, cdef] of entries) {
+    const def = (typeof cdef === 'string') ? parseColStr(cdef) : parseColObj(cdef || {});
+    if (def.primary_key) hasColPk = true;
+    let line = printCol(cname, def, schema, tname);
+    /* file-type companion mime column */
+    const mime = fileMimeCheck(def.file_type || def.type.toUpperCase());
+    if (mime && !def.generated) {
+      const mcol = qi(cname + '_mime_type');
+      /* the CHECK must reference the actual companion column, not a literal 'mime_type' */
+      const expr = mime.replace(/mime_type/g, mcol);
+      line += ',\n    ' + mcol + ' VARCHAR(100)';
+      line += ',\n    CHECK (' + mcol + ' IS NULL OR (' + expr + '))';
+    }
+    colLines.push(line);
+  }
+  const bodyParts = colLines.slice();
+  /* table constraints */
+  let deferredPk = '';
+  const constraintLines = [];
+  if (cons && typeof cons === 'object') {
+    if (Array.isArray(cons.primary_key) && !hasColPk) {
+      const allLocal = cons.primary_key.every(c => localCols.includes(String(c)));
+      if (allLocal) constraintLines.push('    PRIMARY KEY (' + joinIds(cons.primary_key) + ')');
+      else deferredPk = joinIds(cons.primary_key);
+    }
+    if (cons.unique) {
+      if (Array.isArray(cons.unique)) {
+        constraintLines.push('    UNIQUE (' + joinIds(cons.unique) + ')');
+      } else if (typeof cons.unique === 'object') {
+        for (const [un, uv] of Object.entries(cons.unique)) {
+          const cols = Array.isArray(uv) ? joinIds(uv) : qi(String(uv));
+          constraintLines.push('    CONSTRAINT ' + qi(un) + ' UNIQUE (' + cols + ')');
+        }
+      }
+    }
+    if (cons.foreign_key) {
+      if (typeof cons.foreign_key === 'object' && !Array.isArray(cons.foreign_key)) {
+        for (const [fc, fv] of Object.entries(cons.foreign_key)) {
+          constraintLines.push('    FOREIGN KEY (' + qi(fc) + ') REFERENCES ' + fv);
+        }
+      } else if (Array.isArray(cons.foreign_key)) {
+        for (const fe of cons.foreign_key) {
+          if (!fe.columns || !fe.ref_table) continue;
+          let c = '    FOREIGN KEY (' + fe.columns + ') REFERENCES ' + qi(schema) + '.' + fe.ref_table +
+                  '(' + (fe.ref_columns || 'id') + ')';
+          if (fe.ondelete) c += ' ON DELETE ' + fe.ondelete;
+          if (fe.onupdate) c += ' ON UPDATE ' + fe.onupdate;
+          if (fe.deferrable) c += ' ' + fe.deferrable;
+          if (fe.initially) c += ' ' + fe.initially;
+          constraintLines.push(c);
+        }
+      }
+    }
+    if (cons.check) {
+      if (typeof cons.check === 'string') {
+        constraintLines.push('    CHECK (' + cons.check + ')');
+      } else if (typeof cons.check === 'object' && !Array.isArray(cons.check)) {
+        for (const [ckn, ckv] of Object.entries(cons.check))
+          constraintLines.push('    CONSTRAINT ' + qi(ckn) + ' CHECK (' + ckv + ')');
+      } else if (Array.isArray(cons.check)) {
+        for (const ce of cons.check) {
+          if (typeof ce === 'string') constraintLines.push('    CHECK (' + ce + ')');
+          else if (ce.name && ce.expression) constraintLines.push('    CONSTRAINT ' + qi(ce.name) + ' CHECK (' + ce.expression + ')');
+        }
+      }
+    }
+    if (cons.exclude && typeof cons.exclude === 'object' && !Array.isArray(cons.exclude)) {
+      for (const [exn, exv] of Object.entries(cons.exclude)) {
+        const using = exv.using || 'GIST';
+        const elems = (exv.elems || []).map((el, i) => {
+          if (typeof el === 'object') return el.column + ' WITH ' + el.with;
+          return String(el);
+        }).join(', ');
+        constraintLines.push('    CONSTRAINT ' + qi(exn) + ' EXCLUDE USING ' + using + ' (' + elems + ')' +
+                             (exv.where ? ' WHERE (' + exv.where + ')' : ''));
+      }
+    }
+  }
+  if (constraintLines.length) bodyParts.push(...constraintLines);
+  L.push(bodyParts.join(',\n'));
+
+  if (inherit && typeof inherit === 'string') {
+    L.push(') INHERITS (' + qi(schema) + '.' + qi(inherit) + ');');
+    if (deferredPk) L.push('ALTER TABLE ' + qi(schema) + '.' + qi(tname) + ' ADD PRIMARY KEY (' + deferredPk + ');');
+  } else {
+    L.push(');');
+    if (deferredPk) L.push('ALTER TABLE ' + qi(schema) + '.' + qi(tname) + ' ADD PRIMARY KEY (' + deferredPk + ');');
+  }
+
+  /* partition note */
+  if (td.partition && typeof td.partition === 'object') {
+    L.push('-- ' + qi(schema) + '.' + qi(tname) + ' designed to be partitioned by ' +
+           td.partition.by + ' (' + td.partition.column + ')');
+  }
+
+  /* storage / tablespace */
+  if (topts) {
+    if (topts.with) L.push('ALTER TABLE ' + qi(schema) + '.' + qi(tname) + ' SET (' + topts.with + ');');
+    if (topts.tablespace) L.push('ALTER TABLE ' + qi(schema) + '.' + qi(tname) + ' SET TABLESPACE ' + qi(topts.tablespace) + ';');
+  }
+
+  /* indexes */
+  if (indexes && typeof indexes === 'object') {
+    for (const [iname, iv] of Object.entries(indexes)) {
+      let ix = '';
+      if (typeof iv === 'string') {
+        ix = 'CREATE INDEX ' + qi(iname) + ' ON ' + qi(schema) + '.' + qi(tname) + ' (' + iv + ')';
+      } else if (typeof iv === 'object') {
+        ix = 'CREATE ' + (iv.unique ? 'UNIQUE ' : '') + 'INDEX ' +
+             (iv.concurrently ? 'CONCURRENTLY ' : '') + qi(iname) +
+             ' ON ' + qi(schema) + '.' + qi(tname) + ' ' +
+             (iv.type ? 'USING ' + iv.type + ' ' : '') + '(' + (iv.columns || '???') + ')' +
+             (iv.include ? ' INCLUDE (' + iv.include + ')' : '') +
+             (iv.where ? ' WHERE (' + iv.where + ')' : '') +
+             (iv.tablespace ? ' TABLESPACE ' + qi(iv.tablespace) : '');
+      }
+      if (ix) L.push(ix + ';');
+    }
+  }
+
+  /* triggers */
+  if (triggers && Array.isArray(triggers)) {
+    for (const tt of triggers) {
+      if (!tt.name || !tt.event || !tt.function) continue;
+      let tr = 'CREATE TRIGGER ' + qi(tt.name) + '\n    ' +
+               (tt.timing ? tt.timing + ' ' : '') + tt.event +
+               ' ON ' + qi(schema) + '.' + qi(tname) + '\n';
+      if (tt.when) tr += '    ' + tt.when + '\n';
+      tr += '    FOR EACH ' + (tt.for_each_row === false ? 'STATEMENT' : 'ROW') + '\n';
+      if (tt.condition) tr += '    WHEN (' + tt.condition + ')\n';
+      let fn = String(tt.function).replace(/\(\)\s*$/, '');
+      tr += '    EXECUTE FUNCTION ' + fn + (tt.args ? '(' + tt.args + ')' : '()') + ';';
+      L.push(tr);
+      if (tt.comment) L.push("COMMENT ON TRIGGER " + qi(tt.name) + " ON " + qi(schema) + "." + qi(tname) +
+                             " IS '" + esc(tt.comment) + "';");
+    }
+  }
+
+  /* row-level security */
+  if (td.row_security === true) {
+    L.push('ALTER TABLE ' + qi(schema) + '.' + qi(tname) + ' ENABLE ROW LEVEL SECURITY;');
+  }
+  if (policies && Array.isArray(policies)) {
+    for (const pp of policies) {
+      if (!pp.name) continue;
+      let p = 'CREATE POLICY ' + qi(pp.name) + '\n    ON ' + qi(schema) + '.' + qi(tname) + '\n';
+      if (pp.command) p += '    FOR ' + pp.command + '\n';
+      if (pp.role) p += '    TO ' + pp.role + '\n';
+      if (pp.using) p += '    USING (' + pp.using + ')\n';
+      if (pp.check) p += '    WITH CHECK (' + pp.check + ')\n';
+      L.push(p.trim() + ';');
+    }
+  }
+
+  /* comments */
+  if (comments && typeof comments === 'object') {
+    if (comments.table) L.push("COMMENT ON TABLE " + qi(schema) + "." + qi(tname) + " IS '" + esc(comments.table) + "';");
+    for (const [cc, cv] of Object.entries(comments)) {
+      if (cc !== 'table' && typeof cv === 'string')
+        L.push("COMMENT ON COLUMN " + qi(schema) + "." + qi(tname) + "." + qi(cc) + " IS '" + esc(cv) + "';");
+    }
+  }
+
+  return { sql: L.join('\n'), entries, columns, comments };
+}
+
+/* ---------- suggestions ---------- */
+
+function typeUpper(t) { return String(t).toUpperCase().replace(/\[\]$/, ''); }
+
+function sampleValue(colName, def, enums, schemaName) {
+  const T = typeUpper(def.type);
+  if (def.generated) return null;
+  if (def.file_type) return "'/uploads/sample'";
+  if (T === 'UUID') return 'gen_random_uuid()';
+  if (T === 'SERIAL' || T === 'BIGSERIAL' || T === 'SMALLSERIAL' || def.identity_type) return 'DEFAULT';
+  if (['INT','INTEGER','BIGINT','SMALLINT','OID'].includes(T)) return '1';
+  if (['REAL','DOUBLE PRECISION','FLOAT4','FLOAT8','FLOAT'].includes(T)) return '1.5';
+  if (['NUMERIC','DECIMAL'].includes(T)) return '10.00';
+  if (T === 'MONEY') return '10.00';
+  if (T === 'BOOLEAN' || T === 'BOOL') return 'true';
+  if (T === 'DATE') return 'CURRENT_DATE';
+  if (['TIMESTAMP','TIMESTAMPTZ','DATETIME'].includes(T)) return 'NOW()';
+  if (T === 'TIME' || T === 'TIMETZ') return 'CURRENT_TIME';
+  if (T === 'INTERVAL') return "'1 day'";
+  if (T === 'JSONB') return "'{}'::jsonb";
+  if (T === 'JSON') return "'{}'";
+  if (T === 'XML') return "'<tag/>'::xml";
+  if (T === 'INET') return "'192.168.1.1'";
+  if (T === 'CIDR') return "'192.168.1.0/24'";
+  if (T === 'MACADDR' || T === 'MACADDR8') return "'00:00:00:00:00:00'";
+  if (T === 'BYTEA') return "'\\x00'::bytea";
+  if (T === 'POINT') return "POINT(1,2)";
+  if (T === 'BOX') return "BOX('(0,0)','(1,1)')";
+  if (T === 'CIRCLE') return "CIRCLE('(0,0)',1)";
+  if (T === 'POLYGON' || T === 'PATH') return "'((0,0),(1,0),(1,1))'";
+  if (T === 'LINE' || T === 'LSEG') return "'(0,0),(1,1)'";
+  if (T === 'TSVECTOR') return "'sample'::tsvector";
+  if (T === 'TSQUERY') return "'sample'::tsquery";
+  if (T.endsWith('RANGE')) return "'[1,10)'";
+  if (T.startsWith('BIT')) return "B'0'";
+  if (T === 'CITEXT' || T === 'TEXT' || T.startsWith('VARCHAR') || T.startsWith('CHAR')) return "'sample'";
+  if (['FILE','IMAGE','PDF','DOCUMENT','VIDEO','AUDIO'].includes(T)) return "'/uploads/sample'";
+  /* enum or domain — look up first enum value */
+  if (enums && enums[def.type] && Array.isArray(enums[def.type]) && enums[def.type].length)
+    return "'" + enums[def.type][0] + "'";
+  return "'sample'";
+}
+
+function buildSuggestions(root) {
+  const items = []; // {icon, title, desc, code}
+  const tables = root.tables || root.table || {};
+  const enums = root.types || {};
+  const schema = root.schema || 'public';
+
+  const tablesList = Object.entries(tables).filter(([, td]) => td && typeof td === 'object' && td.columns);
+
+  /* 1 — usage snippets per table */
+  for (const [tname, td] of tablesList) {
+    const cols = Object.entries(td.columns).filter(([, c]) => {
+      if (typeof c === 'object') return true;
+      return !String(c).startsWith('Generated(');
+    });
+    const ins = [];
+    const vals = [];
+    for (const [cname, cdef] of cols) {
+      const def = typeof cdef === 'string' ? parseColStr(cdef) : parseColObj(cdef || {});
+      if (def.generated || def.identity_type) continue;
+      const sv = sampleValue(cname, def, enums, schema);
+      if (sv === null) continue;
+      ins.push(qi(cname));
+      vals.push(sv === 'DEFAULT' ? 'DEFAULT' : sv);
+    }
+    if (ins.length) {
+      items.push({
+        kind: 'usage',
+        title: 'Insert a row into ' + qi(tname),
+        desc: 'Minimal INSERT with representative values.',
+        code: 'INSERT INTO ' + qi(schema) + '.' + qi(tname) + '\n  (' + ins.join(', ') + ')\nVALUES\n  (' + vals.join(', ') + ')\nRETURNING *;'
+      });
+    }
+    items.push({
+      kind: 'usage',
+      title: 'Query ' + qi(tname),
+      desc: 'A sensible default read query.',
+      code: 'SELECT * FROM ' + qi(schema) + '.' + qi(tname) + '\nORDER BY 1\nLIMIT 50;'
+    });
+  }
+
+  /* 2 — automatic joins for tables with FKs */
+  for (const [tname, td] of tablesList) {
+    const cons = td.constraints || {};
+    const fks = [];
+    if (typeof cons.foreign_key === 'object' && !Array.isArray(cons.foreign_key))
+      for (const [fc] of Object.entries(cons.foreign_key)) fks.push([fc, null]);
+    if (Array.isArray(cons.foreign_key))
+      for (const fe of cons.foreign_key) fks.push([fe.columns, fe.ref_table]);
+    for (const [cname, refTable] of fks) {
+      const t = refTable || guessRefTable(tables, td, cname);
+      if (!t) continue;
+      items.push({
+        kind: 'usage',
+        title: 'Join ' + qi(tname) + ' → ' + qi(t) + ' on ' + qi(cname),
+        desc: 'Typical JOIN across the foreign key.',
+        code: 'SELECT ' + qi(t) + '.*, ' + qi(tname) + '.*\nFROM ' + qi(schema) + '.' + qi(tname) + '\nJOIN ' + qi(schema) + '.' + qi(t) + '\n  ON ' + qi(tname) + '.' + qi(cname) + ' = ' + qi(t) + '.id\nLIMIT 50;'
+      });
+    }
+  }
+
+  /* 3 — best-practice tips */
+  const tips = [];
+  for (const [tname, td] of tablesList) {
+    const cols = Object.entries(td.columns);
+    const colDefs = cols.map(([n, c]) => [n, typeof c === 'string' ? parseColStr(c) : parseColObj(c || {})]);
+    const fkCols = colDefs.filter(([, d]) => d.is_foreign).map(([n]) => n);
+    const cons = td.constraints || {};
+    if (Array.isArray(cons.foreign_key)) {
+      for (const fe of cons.foreign_key) if (fe.columns) fkCols.push(fe.columns.split(',').map(s => s.trim()));
+    } else if (typeof cons.foreign_key === 'object') {
+      fkCols.push(...Object.keys(cons.foreign_key));
+    }
+    const flat = fkCols.flat();
+    const hasIndexes = td.indexes && Object.keys(td.indexes).length;
+    const indexed = hasIndexes ? Object.values(td.indexes).map(v => typeof v === 'string' ? v : v.columns).join(',') : '';
+    for (const fc of flat) {
+      if (!indexed.includes(fc) && fc !== 'id')
+        tips.push({ table: tname, tip: 'Index foreign key column ' + qi(fc) + ' on ' + qi(tname) +
+                    ' — FK lookups are much faster with an index.',
+                    code: 'CREATE INDEX idx_' + tname.toLowerCase() + '_' + fc.toLowerCase() + '\n  ON ' + qi(schema) + '.' + qi(tname) + ' (' + qi(fc) + ');' });
+    }
+    const hasUpdated = colDefs.some(([n]) => n === 'updated_at');
+    const hasTrigger = td.triggers && td.triggers.some(t => t.event && /UPDATE/.test(t.event));
+    if (hasUpdated && !hasTrigger)
+      tips.push({ table: tname, tip: 'Add a trigger to auto-maintain updated_at on ' + qi(tname) + '.',
+                  code: "CREATE OR REPLACE FUNCTION set_updated_at()\nRETURNS TRIGGER AS $$\nBEGIN\n  NEW.updated_at = NOW();\n  RETURN NEW;\nEND;\n$$ LANGUAGE plpgsql;\n\nCREATE TRIGGER trg_" + tname.toLowerCase() + "_updated\n  BEFORE UPDATE ON " + qi(schema) + "." + qi(tname) + "\n  FOR EACH ROW EXECUTE FUNCTION set_updated_at();" });
+    const hasCreated = colDefs.some(([n]) => n === 'created_at');
+    if (hasCreated && !colDefs.find(([, d]) => d.type === 'TIMESTAMPTZ' || d.type === 'TIMESTAMP') )
+      tips.push({ table: tname, tip: 'Give created_at on ' + qi(tname) + ' a default of NOW().',
+                  code: 'ALTER TABLE ' + qi(schema) + '.' + qi(tname) + '\n  ALTER COLUMN created_at SET DEFAULT NOW();' });
+    if (!td.constraints && !colDefs.some(([, d]) => d.primary_key))
+      tips.push({ table: tname, tip: qi(tname) + ' has no primary key.',
+                  code: 'ALTER TABLE ' + qi(schema) + '.' + qi(tname) + ' ADD PRIMARY KEY (id);' });
+  }
+  for (const t of tips) {
+    items.push({ kind: 'tip', title: 'Recommendation — ' + t.table, desc: t.tip, code: t.code });
+  }
+
+  /* 4 — migration footer */
+  items.push({
+    kind: 'usage',
+    title: 'Apply the migration',
+    desc: 'Run the generated file against your database.',
+    code: 'psql -U your_user -d your_db -f autoschema.sql'
+  });
+
+  return items;
+}
+
+function guessRefTable(tables, td, cname) {
+  /* naive: singularize last part after '_' or '_id' */
+  const m = cname.replace(/_id$/, '').replace(/^id_/, '');
+  for (const t of Object.keys(tables)) {
+    if (t.toLowerCase() === m.toLowerCase()) return t;
+    if (t.toLowerCase() === m.toLowerCase() + 's') return t;
+  }
+  return null;
+}
+
+/* ---------- top-level generator ---------- */
+
+function generateSchema(root) {
+  const lines = [];
+  const database = root.database || 'postgresql';
+  const schema = root.schema || 'public';
+  const roles = root.roles, extensions = root.extensions, sequences = root.sequences,
+        enums = root.types, domains = root.domains, tables = root.tables || root.table,
+        views = root.views, matviews = root.materialized_views, functions = root.functions;
+
+  lines.push('-- ===============================================================');
+  lines.push('-- AutoSchema Studio — Generated DDL for database: ' + database + ' (schema: ' + schema + ')');
+  lines.push('-- ===============================================================');
+  lines.push('');
+  lines.push('CREATE SCHEMA IF NOT EXISTS ' + qi(schema) + ';');
+  lines.push('');
+
+  /* roles */
+  if (roles && Array.isArray(roles)) {
+    lines.push('-- Roles');
+    for (const r of roles) {
+      const rname = typeof r === 'string' ? r : r.name;
+      if (!rname) continue;
+      let s = "DO $do$ BEGIN\n    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '" +
+              rname.replace(/'/g, "''") + "') THEN\n        CREATE ROLE " + qi(rname);
+      if (typeof r === 'object') {
+        if (r.login) s += ' LOGIN';
+        if (r.superuser) s += ' SUPERUSER';
+        if (r.createdb) s += ' CREATEDB';
+        if (r.createrole) s += ' CREATEROLE';
+        if (r.password) s += ' PASSWORD ' + r.password;
+      }
+      s += ';\n    END IF;\nEND $do$;';
+      lines.push(s);
+    }
+    lines.push('');
+  }
+
+  /* extensions */
+  if (extensions && Array.isArray(extensions)) {
+    lines.push('-- Extensions');
+    for (const ext of extensions) {
+      let en = ext, es = null, ec = true;
+      if (typeof ext === 'object') { en = ext.name; es = ext.schema; ec = ext.cascade !== false; }
+      if (!en) continue;
+      let s = 'CREATE EXTENSION IF NOT EXISTS ' + qi(en);
+      if (es) s += ' SCHEMA ' + qi(es);
+      if (ec) s += ' CASCADE';
+      lines.push(s + ';');
+    }
+    lines.push('');
+  }
+
+  /* sequences */
+  if (sequences && typeof sequences === 'object') {
+    lines.push('-- Sequences');
+    for (const [sn, sv] of Object.entries(sequences)) {
+      if (typeof sv !== 'object') continue;
+      let s = 'CREATE SEQUENCE IF NOT EXISTS ' + qi(schema) + '.' + qi(sn);
+      if (sv.start !== undefined) s += ' START ' + sv.start;
+      if (sv.increment !== undefined) s += ' INCREMENT ' + sv.increment;
+      if (sv.minvalue !== undefined) s += ' MINVALUE ' + sv.minvalue;
+      if (sv.maxvalue !== undefined) s += ' MAXVALUE ' + sv.maxvalue;
+      if (sv.cycle) s += ' CYCLE';
+      lines.push(s + ';');
+    }
+    lines.push('');
+  }
+
+  /* enums */
+  if (enums && typeof enums === 'object') {
+    lines.push('-- Custom ENUM types');
+    for (const [tn, tv] of Object.entries(enums)) {
+      if (!Array.isArray(tv)) continue;
+      lines.push('CREATE TYPE ' + qi(schema) + '.' + qi(tn) + ' AS ENUM (' +
+                 tv.map(v => "'" + String(v).replace(/'/g, "''") + "'").join(', ') + ');');
+    }
+    lines.push('');
+  }
+
+  /* domains */
+  if (domains && typeof domains === 'object') {
+    lines.push('-- Custom Domains');
+    for (const [dn, dv] of Object.entries(domains)) {
+      if (typeof dv !== 'object' || !dv.type) continue;
+      let s = 'CREATE DOMAIN ' + qi(schema) + '.' + qi(dn) + ' AS ' + dv.type;
+      if (dv.collation) s += ' COLLATE ' + dv.collation;
+      if (dv.default) s += ' DEFAULT ' + dv.default;
+      if (dv.notnull) s += ' NOT NULL';
+      if (dv.check) s += ' CHECK (' + dv.check + ')';
+      lines.push(s + ';');
+      if (dv.comment) lines.push("COMMENT ON DOMAIN " + qi(schema) + "." + qi(dn) + " IS '" + esc(dv.comment) + "';");
+    }
+    lines.push('');
+  }
+
+  /* functions marked before_tables (trigger functions etc.) */
+  if (functions && Array.isArray(functions)) {
+    const before = functions.filter(f => f && f.before_tables);
+    if (before.length) {
+      lines.push('-- Functions (before tables)');
+      for (const f of before) lines.push(printFunction(schema, f));
+      lines.push('');
+    }
+  }
+
+  /* tables */
+  if (tables && typeof tables === 'object') {
+    lines.push('-- Tables');
+    lines.push('');
+    for (const [tn, td] of Object.entries(tables)) {
+      const res = generateTable(schema, tn, td || {});
+      lines.push(res.sql);
+      lines.push('');
+    }
+  }
+
+  /* views */
+  if (views && typeof views === 'object') {
+    lines.push('-- Views');
+    for (const [vn, vd] of Object.entries(views)) {
+      const q = typeof vd === 'string' ? vd : vd.query;
+      if (!q) continue;
+      let s = 'CREATE VIEW ' + qi(schema) + '.' + qi(vn) + ' AS\n' + q;
+      const co = typeof vd === 'object' ? vd.check_option : null;
+      if (co) s += '\n WITH ' + ((co === 'LOCAL' || co === 'CASCADED') ? co + ' ' : '') + 'CHECK OPTION';
+      lines.push(s + ';');
+      lines.push('');
+    }
+  }
+
+  /* materialized views */
+  if (matviews && typeof matviews === 'object') {
+    lines.push('-- Materialized Views');
+    for (const [vn, vd] of Object.entries(matviews)) {
+      if (!vd.query) continue;
+      let s = 'CREATE MATERIALIZED VIEW IF NOT EXISTS ' + qi(schema) + '.' + qi(vn);
+      if (vd.with) s += ' WITH (' + vd.with + ')';
+      if (vd.tablespace) s += ' TABLESPACE ' + qi(vd.tablespace);
+      s += ' AS\n' + vd.query + ';';
+      lines.push(s);
+      if (vd.index && typeof vd.index === 'object') {
+        for (const [ixn, ixv] of Object.entries(vd.index)) {
+          if (!ixv.columns) continue;
+          lines.push('CREATE INDEX ' + qi(ixn) + ' ON ' + qi(schema) + '.' + qi(vn) + ' (' + ixv.columns + ')' +
+                     (ixv.where ? ' WHERE (' + ixv.where + ')' : '') + ';');
+        }
+      }
+      lines.push('');
+    }
+  }
+
+  /* remaining functions */
+  if (functions && Array.isArray(functions)) {
+    const after = functions.filter(f => f && !f.before_tables);
+    if (after.length) {
+      lines.push('-- Functions');
+      for (const f of after) lines.push(printFunction(schema, f));
+      lines.push('');
+    }
+  }
+
+  lines.push('-- ===============================================================');
+  lines.push('-- End of AutoSchema Studio output');
+  lines.push('-- ===============================================================');
+
+  return lines.join('\n') + '\n';
+}
+
+function printFunction(schema, f) {
+  const ft = f.type || 'FUNCTION';
+  let s = 'CREATE ' + ft + ' ' + qi(schema) + '.' + qi(f.name) + ' (' + (f.args || '') + ')\n';
+  if (f.returns) s += '    RETURNS ' + f.returns + '\n';
+  if (f.language) s += '    LANGUAGE ' + f.language + '\n';
+  if (f.behavior) s += '    ' + f.behavior + '\n';
+  if (f.security_definer) s += '    SECURITY DEFINER\n';
+  s += '    AS $$\n' + (f.body || '') + '\n    $$;';
+  return s;
+}
+
+/* stats for the UI */
+function schemaStats(root) {
+  const tables = root.tables || root.table || {};
+  let tablesCount = 0, columns = 0, indexes = 0, fks = 0, triggers = 0, policies = 0, enums = 0, domains = 0;
+  enums = Object.keys(root.types || {}).length;
+  domains = Object.keys(root.domains || {}).length;
+  for (const [, td] of Object.entries(tables)) {
+    if (!td || typeof td !== 'object') continue;
+    if (td.columns) { tablesCount++; columns += Object.keys(td.columns).length; }
+    if (td.indexes) indexes += Object.keys(td.indexes).length;
+    if (td.triggers) triggers += td.triggers.length;
+    if (td.policies) policies += td.policies.length;
+    const c = td.constraints || {};
+    if (typeof c.foreign_key === 'object') fks += Array.isArray(c.foreign_key) ? c.foreign_key.length : Object.keys(c.foreign_key).length;
+    for (const [, col] of Object.entries(td.columns || {})) {
+      const d = typeof col === 'string' ? parseColStr(col) : parseColObj(col || {});
+      if (d.is_foreign) fks++;
+    }
+  }
+  return { tablesCount, columns, indexes, fks, triggers, policies, enums, domains,
+           views: Object.keys(root.views || {}).length,
+           matviews: Object.keys(root.materialized_views || {}).length };
+}
+
+/* ---------- module export (for node testing) ---------- */
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { generateSchema, buildSuggestions, schemaStats, mapType, parseColStr, parseColObj, qi };
+}
+
+</script>
+<script>
+/* =====================================================================
+   AutoSchema Studio — UI logic (no dependencies)
+   ===================================================================== */
+
+/* ---------- presets ---------- */
+const FULL_SCHEMA = JSON.stringify({
+    "database": "postgresql",
+    "schema": "public",
+
+    "roles": [
+        { "name": "app_user", "login": true },
+        { "name": "reporting" }
+    ],
+
+    "extensions": [
+        { "name": "pgcrypto", "schema": "public", "cascade": true },
+        { "name": "citext", "cascade": true },
+        { "name": "btree_gist", "cascade": true },
+        "uuid-ossp"
+    ],
+
+    "sequences": {
+        "order_number_seq": { "start": 1000, "increment": 5, "minvalue": 1, "maxvalue": 999999, "cycle": true },
+        "audit_seq": { "start": 1, "increment": 1 }
+    },
+
+    "types": {
+        "status": ["active", "inactive", "pending", "archived"],
+        "priority": ["low", "medium", "high", "critical"],
+        "user_role": ["admin", "editor", "viewer", "api"]
+    },
+
+    "domains": {
+        "positive_int": { "type": "INTEGER", "check": "VALUE > 0", "comment": "Positive integer domain" },
+        "us_zip_code": { "type": "TEXT", "check": "VALUE ~ '^[0-9]{5}(-[0-9]{4})?$'" },
+        "email_address": {
+            "type": "VARCHAR(320)",
+            "check": "VALUE ~ '^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$'"
+        }
+    },
+
+    "tables": {
+        "users": {
+            "table_options": { "with": "fillfactor=70", "tablespace": "pg_default" },
+            "columns": {
+                "id": {
+                    "type": "UUID",
+                    "default": "gen_random_uuid()",
+                    "primary_key": true,
+                    "comment": "Primary key"
+                },
+                "username": { "type": "CITEXT", "notnull": true, "unique": true, "comment": "Unique username (case-insensitive)" },
+                "email": { "type": "email_address", "notnull": true },
+                "password_hash": { "type": "BYTEA", "notnull": true },
+                "role": { "type": "user_role", "default": "'viewer'" },
+                "created_at": { "type": "TIMESTAMPTZ", "default": "NOW()", "notnull": true },
+                "last_login": { "type": "TIMESTAMPTZ" },
+                "session_timeout": { "type": "INTERVAL", "default": "'2 hours'" },
+                "ip_address": { "type": "INET" },
+                "mac": { "type": "MACADDR" },
+                "profile": { "type": "JSONB", "default": "'{}'::jsonb" },
+                "prefs": { "type": "TEXT[]", "default": "'{}'" },
+                "deleted_at": { "type": "TIMESTAMPTZ" },
+                "active_range": { "type": "DATERANGE" },
+                "username_search": { "type": "TSVECTOR", "generated": "ALWAYS AS (to_tsvector('english', username)) STORED" }
+            },
+            "constraints": {
+                "primary_key": ["id"],
+                "unique": { "uq_users_username_email": ["username", "email"] },
+                "check": { "chk_email_not_empty": "email <> ''" },
+                "exclude": {
+                    "excl_users_daterange": {
+                        "elems": [ { "column": "active_range", "with": "&&" } ],
+                        "using": "GIST",
+                        "where": "active_range IS NOT NULL"
+                    }
+                }
+            },
+            "indexes": {
+                "idx_users_created": { "columns": "created_at DESC", "type": "BTREE" },
+                "idx_users_profile": { "columns": "profile", "type": "GIN" },
+                "idx_users_lower_email": {
+                    "unique": true,
+                    "columns": "LOWER(email)",
+                    "type": "BTREE",
+                    "where": "deleted_at IS NULL"
+                },
+                "idx_users_prefs": { "columns": "prefs", "type": "GIN" }
+            },
+            "comments": {
+                "table": "Application user accounts",
+                "username": "Login name",
+                "email": "Contact e-mail address"
+            }
+        },
+
+        "categories": {
+            "columns": {
+                "id": { "type": "BIGSERIAL", "primary_key": true },
+                "name": { "type": "VARCHAR(100)", "notnull": true, "unique": true },
+                "parent_id": { "type": "BIGINT", "references": { "table": "categories", "column": "id", "ondelete": "CASCADE" } },
+                "slug": { "type": "VARCHAR(120)" },
+                "position": { "type": "SMALLINT", "default": "0", "check": "position >= 0" }
+            },
+            "constraints": {
+                "primary_key": ["id"],
+                "check": { "chk_slug_not_empty": "slug IS NULL OR slug <> ''" }
+            },
+            "comments": {
+                "table": "Content categories (self-referencing tree)"
+            }
+        },
+
+        "products": {
+            "columns": {
+                "id": { "type": "INTEGER", "identity": { "type": "ALWAYS", "start": 1, "increment": 1 }, "primary_key": true },
+                "name": { "type": "VARCHAR(200)", "notnull": true },
+                "description": { "type": "TEXT" },
+                "price": { "type": "NUMERIC(10,2)", "notnull": true, "check": "price >= 0" },
+                "cost": { "type": "MONEY" },
+                "discount": { "type": "DOUBLE PRECISION", "default": "0.0" },
+                "rating": { "type": "REAL" },
+                "sku": { "type": "VARCHAR(50)", "collation": "\"C\"", "notnull": true, "unique": true },
+                "stock": { "type": "positive_int", "default": "1" },
+                "is_active": { "type": "BOOLEAN", "default": "true" },
+                "flags": { "type": "BIT(8)", "default": "B'00000000'" },
+                "category_id": { "type": "INTEGER", "references": { "table": "categories", "column": "id", "ondelete": "RESTRICT", "onupdate": "CASCADE" } },
+                "meta": { "type": "JSON", "default": "'{}'" },
+                "tags": { "type": "VARCHAR(50)[]", "default": "'{}'" },
+                "geoloc": { "type": "POINT" },
+                "bounding_box": { "type": "BOX" },
+                "region": { "type": "POLYGON" },
+                "valid_during": { "type": "TSTZRANGE" },
+                "min_quantity": { "type": "SMALLINT" },
+                "max_quantity": { "type": "SMALLINT" },
+                "quantity_range": { "type": "INT4RANGE", "generated": "ALWAYS AS (int4range(min_quantity, max_quantity)) STORED" },
+                "data": { "type": "BYTEA" },
+                "created_at": { "type": "TIMESTAMPTZ", "default": "CURRENT_TIMESTAMP", "notnull": true },
+                "updated_at": { "type": "TIMESTAMP" },
+                "price_with_tax": { "type": "NUMERIC(10,2)", "generated": "ALWAYS AS (price * 1.15) STORED" }
+            },
+            "constraints": {
+                "primary_key": ["id"],
+                "check": {
+                    "chk_qty_range": "min_quantity <= max_quantity"
+                },
+                "foreign_key": {
+                    "category_id": "public.categories(id) ON DELETE RESTRICT ON UPDATE CASCADE"
+                },
+                "exclude": {
+                    "excl_products_qty": {
+                        "elems": [
+                            { "column": "id", "with": "=" },
+                            { "column": "quantity_range", "with": "&&" }
+                        ],
+                        "using": "GIST"
+                    }
+                }
+            },
+            "indexes": {
+                "idx_products_name": "name",
+                "idx_products_price": { "columns": "price", "type": "BRIN" },
+                "idx_products_tags_gin": { "columns": "tags", "type": "GIN" },
+                "idx_products_cover": { "columns": "id", "include": "name, price" },
+                "idx_products_partial": { "unique": true, "columns": "sku", "where": "is_active" }
+            },
+            "triggers": [
+                {
+                    "name": "trg_products_set_updated",
+                    "timing": "BEFORE",
+                    "event": "UPDATE",
+                    "for_each_row": true,
+                    "function": "set_updated_at()",
+                    "comment": "Sets updated_at on update"
+                }
+            ],
+            "comments": {
+                "table": "Product catalog entries"
+            }
+        },
+
+        "orders": {
+            "columns": {
+                "id": { "type": "BIGSERIAL" },
+                "order_number": { "type": "VARCHAR(30)", "default": "nextval('order_number_seq')::text", "notnull": true },
+                "user_id": { "type": "UUID", "references": { "table": "users", "column": "id", "ondelete": "SET NULL", "deferrable": "DEFERRABLE", "initially": "DEFERRED" } },
+                "status": { "type": "status", "default": "'pending'" },
+                "priority": { "type": "priority" },
+                "total": { "type": "NUMERIC(12,2)", "default": "0" },
+                "created_at": { "type": "TIMESTAMPTZ", "default": "NOW()", "notnull": true },
+                "shipped_date": { "type": "DATE" },
+                "delivery_window": { "type": "TSRANGE" },
+                "notes": { "type": "TEXT" },
+                "zip": { "type": "us_zip_code" }
+            },
+            "constraints": {
+                "primary_key": ["id"],
+                "unique": { "uq_orders_number": "order_number" },
+                "check": { "chk_total_positive": "total >= 0" }
+            },
+            "indexes": {
+                "idx_orders_user": { "columns": "user_id", "type": "HASH" },
+                "idx_orders_status_created": { "columns": "status, created_at DESC", "where": "status = 'pending'" }
+            },
+            "row_security": true,
+            "policies": [
+                {
+                    "name": "pol_orders_owner",
+                    "command": "SELECT",
+                    "role": "app_user",
+                    "using": "user_id = current_setting('app.user_id')::uuid"
+                },
+                {
+                    "name": "pol_orders_insert",
+                    "command": "INSERT",
+                    "role": "app_user",
+                    "check": "user_id = current_setting('app.user_id')::uuid"
+                }
+            ],
+            "comments": {
+                "table": "Customer orders with row-level security"
+            }
+        },
+
+        "order_items": {
+            "columns": {
+                "id": { "type": "BIGSERIAL" },
+                "order_id": { "type": "BIGINT" },
+                "product_id": { "type": "INTEGER" },
+                "qty": { "type": "SMALLINT", "default": "1", "check": "qty > 0" },
+                "unit_price": { "type": "NUMERIC(10,2)", "notnull": true },
+                "line_total": { "type": "NUMERIC(12,2)", "generated": "ALWAYS AS (qty * unit_price) STORED" }
+            },
+            "constraints": {
+                "primary_key": ["id"],
+                "unique": { "uq_order_items": ["order_id", "product_id"] },
+                "foreign_key": [
+                    {
+                        "columns": "order_id",
+                        "ref_table": "orders",
+                        "ref_columns": "id",
+                        "ondelete": "CASCADE"
+                    },
+                    {
+                        "columns": "product_id",
+                        "ref_table": "products",
+                        "ref_columns": "id",
+                        "ondelete": "RESTRICT"
+                    }
+                ]
+            },
+            "indexes": {
+                "idx_order_items_order": "order_id",
+                "idx_order_items_product": "product_id"
+            },
+            "comments": {
+                "table": "Line items inside an order"
+            }
+        },
+
+        "audit_log": {
+            "columns": {
+                "id": { "type": "BIGSERIAL" },
+                "entity_type": { "type": "VARCHAR(100)", "notnull": true },
+                "entity_id": { "type": "VARCHAR(100)" },
+                "action": { "type": "VARCHAR(20)", "notnull": true },
+                "actor": { "type": "UUID" },
+                "changes": { "type": "JSONB" },
+                "request_id": { "type": "UUID", "default": "gen_random_uuid()" },
+                "event_time": { "type": "TIMESTAMPTZ", "default": "NOW()" }
+            },
+            "constraints": {
+                "primary_key": ["id"],
+                "check": { "chk_action": "action IN ('INSERT','UPDATE','DELETE','SELECT')" }
+            },
+            "indexes": {
+                "idx_audit_entity": { "columns": "entity_type, entity_id" },
+                "idx_audit_time": { "columns": "event_time", "type": "BRIN" },
+                "idx_audit_changes": { "columns": "changes", "type": "GIN" }
+            },
+            "comments": {
+                "table": "Append-only audit trail"
+            }
+        },
+
+        "user_backup": {
+            "columns": {
+                "backup_id": { "type": "BIGSERIAL" },
+                "taken_at": { "type": "TIMESTAMPTZ", "default": "NOW()" }
+            },
+            "like": { "table": "users", "options": "INCLUDING DEFAULTS INCLUDING STORAGE" },
+            "comments": {
+                "table": "Demonstrates CREATE TABLE ... LIKE users INCLUDING DEFAULTS"
+            }
+        },
+
+        "people": {
+            "columns": {
+                "id": { "type": "BIGSERIAL" },
+                "full_name": { "type": "VARCHAR(200)", "notnull": true },
+                "born_on": { "type": "DATE" }
+            },
+            "constraints": {
+                "primary_key": ["id"]
+            },
+            "comments": {
+                "table": "Parent table for inheritance demo"
+            }
+        },
+
+        "employees": {
+            "columns": {
+                "hire_date": { "type": "DATE" },
+                "salary": { "type": "NUMERIC(12,2)" }
+            },
+            "constraints": {
+                "primary_key": ["id"]
+            },
+            "inherits": "people",
+            "indexes": {
+                "idx_employees_salary": "salary"
+            },
+            "comments": {
+                "table": "Child table that inherits people"
+            }
+        },
+
+        "session_stats": {
+            "table_options": { "unlogged": true },
+            "columns": {
+                "id": { "type": "BIGSERIAL" },
+                "user_id": { "type": "UUID" },
+                "started_at": { "type": "TIMESTAMPTZ", "default": "NOW()" },
+                "duration": { "type": "INTERVAL" }
+            },
+            "constraints": {
+                "primary_key": ["id"]
+            },
+            "comments": {
+                "table": "Demonstrates UNLOGGED table"
+            }
+        }
+    },
+
+    "views": {
+        "v_users_active": {
+            "query": "SELECT id, username, email, role FROM users WHERE role <> 'admin'",
+            "check_option": "CASCADED"
+        },
+        "v_order_totals": {
+            "query": "SELECT o.id, o.order_number, SUM(oi.line_total) AS total FROM orders o JOIN order_items oi ON oi.order_id = o.id GROUP BY o.id, o.order_number"
+        }
+    },
+
+    "materialized_views": {
+        "mv_product_sales": {
+            "query": "SELECT p.id, p.name, SUM(oi.qty) AS units_sold FROM products p JOIN order_items oi ON oi.product_id = p.id GROUP BY p.id, p.name",
+            "with": "fillfactor=100",
+            "tablespace": "pg_default",
+            "index": {
+                "idx_mv_product_sales_name": { "columns": "name" },
+                "idx_mv_product_sales_units": { "columns": "units_sold DESC" }
+            }
+        }
+    },
+
+    "functions": [
+        {
+            "name": "set_updated_at",
+            "args": "",
+            "returns": "trigger",
+            "language": "plpgsql",
+            "behavior": "VOLATILE",
+            "before_tables": true,
+            "body": "BEGIN\n    NEW.updated_at = NOW();\n    RETURN NEW;\nEND;"
+        },
+        {
+            "name": "get_user_count",
+            "args": "",
+            "returns": "BIGINT",
+            "language": "sql",
+            "behavior": "STABLE",
+            "body": "SELECT COUNT(*) FROM users;"
+        }
+    ]
+});
+
+const PRESETS = {
+  full: { label: 'Full feature demo',  value: FULL_SCHEMA },
+  blog: { label: 'Blog · minimal', value: JSON.stringify({
+    database: 'postgresql', schema: 'public',
+    extensions: ['pgcrypto', 'citext', 'pg_trgm'],
+    types: { post_status: ['draft', 'published', 'archived'] },
+    tables: {
+      authors: {
+        columns: {
+          id: { type: 'UUID', default: 'gen_random_uuid()', primary_key: true },
+          name: { type: 'CITEXT', notnull: true },
+          email: { type: 'VARCHAR(255)', unique: true },
+          bio: { type: 'TEXT' },
+          created_at: { type: 'TIMESTAMPTZ', default: 'NOW()', notnull: true }
+        },
+        indexes: { idx_authors_name: { columns: 'name', type: 'BTREE' } },
+        comments: { table: 'Blog authors' }
+      },
+      posts: {
+        columns: {
+          id: { type: 'BIGSERIAL', primary_key: true },
+          author_id: { type: 'UUID', references: { table: 'authors', column: 'id', ondelete: 'CASCADE' } },
+          title: { type: 'VARCHAR(200)', notnull: true },
+          slug: { type: 'VARCHAR(220)', notnull: true, unique: true },
+          body: { type: 'TEXT' },
+          status: { type: 'post_status', default: "'draft'" },
+          tags: { type: 'TEXT[]', default: "'{}'" },
+          views: { type: 'BIGINT', default: '0' },
+          published_at: { type: 'TIMESTAMPTZ' }
+        },
+        indexes: {
+          idx_posts_author: { columns: 'author_id' },
+          idx_posts_status: { columns: 'status, published_at DESC', where: "status = 'published'" },
+          idx_posts_body: { columns: 'body gin_trgm_ops', type: 'GIN' }
+        },
+        comments: { table: 'Blog posts' }
+      },
+      comments: {
+        columns: {
+          id: { type: 'BIGSERIAL', primary_key: true },
+          post_id: { type: 'BIGINT', references: { table: 'posts', column: 'id', ondelete: 'CASCADE' } },
+          author_name: { type: 'VARCHAR(100)' },
+          content: { type: 'TEXT', notnull: true },
+          created_at: { type: 'TIMESTAMPTZ', default: 'NOW()' }
+        },
+        indexes: { idx_comments_post: { columns: 'post_id' } },
+        comments: { table: 'Post comments' }
+      }
+    },
+    views: {
+      v_published_posts: {
+        query: "SELECT p.title, p.slug, a.name AS author, p.published_at\nFROM posts p\nJOIN authors a ON a.id = p.author_id\nWHERE p.status = 'published'"
+      }
+    }
+  }, null, 2) },
+
+  ecom: { label: 'E-commerce · products', value: JSON.stringify({
+    database: 'postgresql', schema: 'public',
+    types: { order_status: ['pending', 'paid', 'shipped', 'cancelled'] },
+    sequences: { order_seq: { start: 1000, increment: 1 } },
+    tables: {
+      categories: {
+        columns: {
+          id: { type: 'INTEGER', identity: { type: 'ALWAYS', start: 1 }, primary_key: true },
+          name: { type: 'VARCHAR(100)', notnull: true, unique: true }
+        },
+        comments: { table: 'Product categories' }
+      },
+      products: {
+        columns: {
+          id: { type: 'BIGSERIAL', primary_key: true },
+          category_id: { type: 'INTEGER', references: { table: 'categories', column: 'id', ondelete: 'RESTRICT' } },
+          name: { type: 'VARCHAR(200)', notnull: true },
+          sku: { type: 'VARCHAR(50)', notnull: true, unique: true },
+          price: { type: 'NUMERIC(10,2)', notnull: true, check: 'price >= 0' },
+          stock: { type: 'INTEGER', default: '0', check: 'stock >= 0' },
+          active: { type: 'BOOLEAN', default: 'true' },
+          photo: { type: 'Image' },
+          tags: { type: 'TEXT[]', default: "'{}'" },
+          created_at: { type: 'TIMESTAMPTZ', default: 'NOW()' }
+        },
+        indexes: {
+          idx_products_cat: { columns: 'category_id' },
+          idx_products_name: 'name',
+          idx_products_active_sku: { unique: true, columns: 'sku', where: 'active' }
+        },
+        comments: { table: 'Product catalog' }
+      },
+      orders: {
+        columns: {
+          id: { type: 'BIGSERIAL', primary_key: true },
+          number: { type: 'VARCHAR(30)', default: "nextval('order_seq')::text", notnull: true },
+          status: { type: 'order_status', default: "'pending'" },
+          total: { type: 'NUMERIC(12,2)', default: '0', check: 'total >= 0' },
+          placed_at: { type: 'TIMESTAMPTZ', default: 'NOW()' }
+        },
+        indexes: { idx_orders_status: { columns: 'status' } },
+        comments: { table: 'Customer orders' }
+      },
+      order_items: {
+        columns: {
+          id: { type: 'BIGSERIAL', primary_key: true },
+          order_id: { type: 'BIGINT' },
+          product_id: { type: 'BIGINT' },
+          qty: { type: 'INTEGER', default: '1', check: 'qty > 0' },
+          unit_price: { type: 'NUMERIC(10,2)', notnull: true },
+          line_total: { type: 'NUMERIC(12,2)', generated: 'ALWAYS AS (qty * unit_price) STORED' }
+        },
+        constraints: {
+          unique: { uq_order_product: ['order_id', 'product_id'] },
+          foreign_key: [
+            { columns: 'order_id', ref_table: 'orders', ondelete: 'CASCADE' },
+            { columns: 'product_id', ref_table: 'products', ondelete: 'RESTRICT' }
+          ]
+        },
+        indexes: { idx_oi_order: 'order_id', idx_oi_product: 'product_id' },
+        comments: { table: 'Order line items' }
+      }
+    }
+  }, null, 2) },
+
+  legacy: { label: 'Legacy v1 · string format', value: JSON.stringify({
+    database: 'postgresql', schema: 'public',
+    types: { status: ['active', 'inactive', 'pending'] },
+    table: {
+      website_info: {
+        columns: {
+          id: 'Serial',
+          name: 'Char(50,notnull)',
+          email: 'Char(50,unique)',
+          status: "status DEFAULT 'active'",
+          created_at: 'DateTime',
+          tags: 'Text[]',
+          metadata: 'Jsonb',
+          visits: 'BigInt DEFAULT 0',
+          full_name: "Generated(name || ' Website')",
+          logo_file: 'File',
+          banner_image: 'Image'
+        },
+        constraints: { primary_key: ['id'], check: 'visits >= 0' },
+        indexes: { idx_email: 'email' },
+        comments: { table: 'Website info', name: 'Site name' }
+      },
+      address: {
+        columns: {
+          id: 'Serial',
+          web: 'Foreign(website_info) ON DELETE CASCADE',
+          village: 'Char(50)',
+          road: 'Char(50,notnull)'
+        },
+        constraints: { primary_key: ['id'] },
+        comments: { table: 'Addresses linked to websites' }
+      }
+    }
+  }, null, 2) }
+};
+
+/* ---------- helpers ---------- */
+
+const $ = id => document.getElementById(id);
+
+function escapeHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+const SQL_KEYWORDS = new Set(`
+select insert update delete from where group by order limit offset having join inner left right full outer cross on as
+and or not null is true false in exists any all between like ilike distinct union except intersect with
+create table index unique primary key foreign references column constraint check exclude default generated always
+stored identity start increment minvalue maxvalue cycle sequence type enum domain extension view materialized
+trigger function procedure returns language plpgsql sql volatile stable immutable security definer cascade
+restrict set no action deferrable initially deferred immediate unlogged temporary temp alter add drop rename to
+comment tablespace using btree hash gin gist brin include concurrently where if begin end do case when then else
+row level security enable policy to current_setting over partition interval date time timestamp timestamptz
+numeric decimal varchar char text boolean bigint smallint integer serial bigserial smallserial real double
+precision bytea uuid json jsonb xml inet cidr macaddr money point line lseg box path polygon circle tsvector
+tsquery int4range int8range numrange tsrange tstzrange daterange bit varying current_timestamp now current_date
+current_time nextval gen_random_uuid coalesce count sum avg min max substring length lower upper trim replace
+formatting refresh concurrently vacuum analyze
+`.trim().split(/\s+/));
+
+function hlSQL(sql) {
+  const re = /(--[^\n]*)|('(?:[^']|'')*')|("(?:[^"]|"")*")|(\b\d+(?:\.\d+)?\b)|([A-Za-z_][A-Za-z0-9_]*)|(\S)/g;
+  let out = '', last = 0, m;
+  while ((m = re.exec(sql))) {
+    out += escapeHtml(sql.slice(last, m.index));
+    const all = m[0], cm = m[1], str = m[2], idq = m[3], num = m[4], word = m[5];
+    if (cm) out += '<span class="tok-cm">' + escapeHtml(cm) + '</span>';
+    else if (str) out += '<span class="tok-str">' + escapeHtml(str) + '</span>';
+    else if (idq) out += '<span class="tok-cte">' + escapeHtml(idq) + '</span>';
+    else if (num) out += '<span class="tok-num">' + num + '</span>';
+    else if (word) out += SQL_KEYWORDS.has(word.toUpperCase()) ? '<span class="tok-kw">' + word + '</span>' : word;
+    else out += '<span class="tok-op">' + escapeHtml(all) + '</span>';
+    last = re.lastIndex;
+  }
+  out += escapeHtml(sql.slice(last));
+  return out;
+}
+
+let toastTimer = null;
+function toast(msg, kind) {
+  const t = $('toast');
+  t.className = 'show ' + (kind || '');
+  t.querySelector('.t-ico').textContent = kind === 'err' ? '⚠' : kind === 'ok' ? '✓' : '•';
+  t.querySelector('.t-msg').textContent = msg;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.className = ''; }, 2400);
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch (e) {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      return ok;
+    } catch (e2) { return false; }
+  }
+}
+
+/* ---------- editor ---------- */
+
+const editor = $('editor');
+const gutter = $('gutter');
+const jsonDot = $('json-dot');
+const jsonLabel = $('json-label');
+
+function renderLines() {
+  const n = editor.value.split('\n').length;
+  let html = '';
+  for (let i = 1; i <= n; i++) html += '<div>' + i + '</div>';
+  gutter.innerHTML = html;
+}
+
+function syncScroll() { gutter.scrollTop = editor.scrollTop; }
+
+editor.addEventListener('input', () => {
+  renderLines();
+  validateJSON();
+});
+
+editor.addEventListener('scroll', syncScroll);
+editor.addEventListener('keydown', e => {
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    const s = editor.selectionStart, en = editor.selectionEnd;
+    editor.value = editor.value.slice(0, s) + '    ' + editor.value.slice(en);
+    editor.selectionStart = editor.selectionEnd = s + 4;
+    renderLines(); validateJSON();
+  }
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); run(); }
+});
+
+function validateJSON() {
+  const err = $('editor-err');
+  try {
+    JSON.parse(editor.value);
+    jsonDot.className = 'dot ok';
+    jsonLabel.textContent = 'JSON valid';
+    err.classList.remove('show');
+    return true;
+  } catch (e) {
+    jsonDot.className = 'dot err';
+    jsonLabel.textContent = 'JSON error';
+    const pos = parseJSONError(e.message);
+    err.textContent = '⚠ ' + e.message + (pos ? '  (line ' + pos.line + ', col ' + pos.col + ')' : '');
+    err.classList.add('show');
+    return false;
+  }
+}
+
+function parseJSONError(msg) {
+  let pos = null;
+  const lm = msg.match(/line (\d+) column (\d+)/);
+  if (lm) return { line: +lm[1], col: +lm[2] };
+  const pm = msg.match(/position (\d+)/);
+  if (pm) {
+    const before = editor.value.slice(0, +pm[1]);
+    const lines = before.split('\n');
+    return { line: lines.length, col: lines[lines.length - 1].length + 1 };
+  }
+  return null;
+}
+
+/* ---------- output ---------- */
+
+let lastSql = '';
+let lastSuggestions = [];
+let suggFilter = 'all';
+
+function setPane(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  document.querySelectorAll('.pane').forEach(p => p.classList.toggle('active', p.id === 'pane-' + name));
+}
+
+function renderSQL(sql) {
+  lastSql = sql;
+  $('sql-out').innerHTML = hlSQL(sql);
+  $('tab-sql-count').textContent = sql.split('\n').length;
+}
+
+function renderSuggestions(items) {
+  lastSuggestions = items;
+  $('tab-sugg-count').textContent = items.length;
+  const list = $('sugg-list');
+  const filtered = items.filter(i => suggFilter === 'all' || i.kind === suggFilter);
+  if (!filtered.length) {
+    list.innerHTML = '<div class="empty">Nothing to suggest for this filter.</div>';
+    return;
+  }
+  list.innerHTML = filtered.map((it, i) => `
+    <div class="sugg-card">
+      <div class="sugg-card-head">
+        <span class="sugg-ico ${it.kind}">${it.kind === 'tip' ? '💡' : '⚡'}</span>
+        <div style="min-width:0">
+          <div class="sugg-title">${escapeHtml(it.title)}</div>
+          <div class="sugg-desc">${escapeHtml(it.desc || '')}</div>
+        </div>
+        <div class="head-spacer"></div>
+        <button class="btn btn-icon" data-copy="${i}" title="Copy code">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        </button>
+      </div>
+      <div class="sugg-body">
+        <div class="sugg-code">${escapeHtml(it.code)}</div>
+      </div>
+    </div>`).join('');
+}
+
+function renderStats(root) {
+  const s = schemaStats(root);
+  const set = (id, v, cls) => { const el = $(id); el.innerHTML = v; el.className = 'c-acc ' + (cls || ''); };
+  set('st-tables', s.tablesCount, '');
+  set('st-columns', s.columns);
+  set('st-indexes', s.indexes);
+  set('st-fks', s.fks);
+  set('st-triggers', s.triggers);
+  set('st-policies', s.policies);
+  set('st-enums', s.enums);
+  set('st-domains', s.domains);
+  set('st-views', s.views + s.matviews);
+}
+
+function run() {
+  if (!validateJSON()) {
+    toast('Fix the JSON errors before generating.', 'err');
+    editor.focus();
+    return;
+  }
+  try {
+    const root = JSON.parse(editor.value);
+    const sql = generateSchema(root);
+    renderSQL(sql);
+    renderSuggestions(buildSuggestions(root));
+    renderStats(root);
+    toast('Generated ' + sql.split('\n').length + ' lines of SQL', 'ok');
+  } catch (e) {
+    toast('Generation failed: ' + e.message, 'err');
+    console.error(e);
+  }
+}
+
+/* ---------- header actions ---------- */
+
+function formatJSON() {
+  try {
+    editor.value = JSON.stringify(JSON.parse(editor.value), null, 2);
+    renderLines(); validateJSON();
+    toast('JSON formatted', 'ok');
+  } catch (e) {
+    toast('Cannot format: ' + e.message, 'err');
+  }
+}
+
+function loadSample() {
+  const sel = $('sample');
+  const v = PRESETS[sel.value];
+  if (!v) return;
+  editor.value = prettyJson(v.value);
+  renderLines(); validateJSON(); run();
+}
+
+function prettyJson(s) {
+  try { return JSON.stringify(JSON.parse(s), null, 2); }
+  catch (e) { return s; }
+}
+
+$('sample').addEventListener('change', loadSample);
+$('btn-format').addEventListener('click', formatJSON);
+$('btn-run').addEventListener('click', run);
+$('btn-copy').addEventListener('click', async () => {
+  if (!lastSql) return;
+  (await copyText(lastSql)) ? toast('SQL copied to clipboard', 'ok') : toast('Copy failed', 'err');
+});
+$('btn-download').addEventListener('click', () => {
+  if (!lastSql) return;
+  const blob = new Blob([lastSql], { type: 'application/sql' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'autoschema.sql';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  toast('Downloaded autoschema.sql', 'ok');
+});
+
+/* tabs + filters */
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => setPane(t.dataset.tab)));
+document.querySelectorAll('.filter').forEach(f => f.addEventListener('click', () => {
+  document.querySelectorAll('.filter').forEach(x => x.classList.toggle('active', x === f));
+  suggFilter = f.dataset.filter;
+  renderSuggestions(lastSuggestions);
+}));
+
+/* suggested code copy buttons (delegated) */
+$('sugg-list').addEventListener('click', async e => {
+  const btn = e.target.closest('[data-copy]');
+  if (!btn) return;
+  const item = lastSuggestions[+btn.dataset.copy];
+  if (!item) return;
+  (await copyText(item.code)) ? toast('Code copied', 'ok') : toast('Copy failed', 'err');
+});
+
+/* ---------- boot ---------- */
+
+editor.value = prettyJson(PRESETS.full.value);
+renderLines();
+validateJSON();
+run();
+
+</script>
+</body>
+</html>
