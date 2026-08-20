@@ -7,6 +7,11 @@
 There is also a **pure HTML + CSS + JavaScript** web version — `web/index.html` (self-contained, no dependencies, runs 100% in the browser, nothing leaves your device):
 
 - **JSON → SQL live converter** — paste/edit a schema and hit **Generate SQL** (or `Ctrl+Enter`)
+- **Compliance checker** — live validation of your JSON against the AutoSchema format:
+  - Flags unknown keys, missing `columns`, wrong types, undefined enums/domains, broken references, invalid triggers/policies, and more
+  - **Did-you-mean** suggestions for typos (`"colums"` → `"columns"`, `"Interger"` → `"INTEGER"`, `"Tex"` → `"TEXT"`)
+  - **Auto-fix all** — one click converts `"primary_key": "id"` → `["id"]`, coerces string booleans, wraps enums as arrays, renames typos, and iterates until the schema is clean
+  - Live status dot on the editor: green = compliant, amber = warnings, red = errors
 - **Suggested code** — auto-generated sample `INSERT`/`SELECT`/`JOIN` queries per table, plus best-practice recommendations (missing FK indexes, `updated_at` triggers, etc.)
 - Syntax-highlighted SQL output, copy & download (`.sql`)
 - Four built-in examples: full feature set, blog, e-commerce, and the legacy v1 string format

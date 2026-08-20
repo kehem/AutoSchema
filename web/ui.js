@@ -249,6 +249,8 @@ function syncScroll() { gutter.scrollTop = editor.scrollTop; }
 editor.addEventListener('input', () => {
   renderLines();
   validateJSON();
+  clearTimeout(complTimer);
+  complTimer = setTimeout(runCompliance, 300);
 });
 
 editor.addEventListener('scroll', syncScroll);
@@ -263,22 +265,123 @@ editor.addEventListener('keydown', e => {
   if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); run(); }
 });
 
+let jsonValid = true;
+
 function validateJSON() {
   const err = $('editor-err');
   try {
     JSON.parse(editor.value);
-    jsonDot.className = 'dot ok';
-    jsonLabel.textContent = 'JSON valid';
+    jsonValid = true;
     err.classList.remove('show');
+    updateJsonDot();
     return true;
   } catch (e) {
-    jsonDot.className = 'dot err';
-    jsonLabel.textContent = 'JSON error';
+    jsonValid = false;
     const pos = parseJSONError(e.message);
     err.textContent = '⚠ ' + e.message + (pos ? '  (line ' + pos.line + ', col ' + pos.col + ')' : '');
     err.classList.add('show');
+    updateJsonDot();
     return false;
   }
+}
+
+/* ---------- compliance ---------- */
+
+let complianceIssues = [];
+let complTimer = null;
+
+function runCompliance() {
+  let issues;
+  try {
+    JSON.parse(editor.value);
+    issues = lintText(editor.value);
+  } catch (e) {
+    issues = [{ severity: 'error', path: '', message: 'Invalid JSON — ' + e.message, fix: null, snippet: '' }];
+  }
+  complianceIssues = issues;
+  renderCompliance();
+  updateJsonDot();
+}
+
+function updateJsonDot() {
+  if (!jsonValid) {
+    jsonDot.className = 'dot err';
+    jsonLabel.textContent = 'JSON error';
+    return;
+  }
+  const errs = complianceIssues.filter(i => i.severity === 'error').length;
+  const warns = complianceIssues.filter(i => i.severity === 'warning').length;
+  if (errs) {
+    jsonDot.className = 'dot err';
+    jsonLabel.textContent = errs + ' error' + (errs > 1 ? 's' : '');
+  } else if (warns) {
+    jsonDot.className = 'dot warn';
+    jsonLabel.textContent = warns + ' warning' + (warns > 1 ? 's' : '');
+  } else {
+    jsonDot.className = 'dot ok';
+    jsonLabel.textContent = 'compliant';
+  }
+}
+
+function renderCompliance() {
+  const errs = complianceIssues.filter(i => i.severity === 'error').length;
+  const warns = complianceIssues.filter(i => i.severity === 'warning').length;
+  $('tab-compl-count').textContent = complianceIssues.length;
+  $('compl-summary').textContent =
+    complianceIssues.length === 0 ? '✓ Schema is compliant' :
+    (errs ? errs + ' error' + (errs > 1 ? 's' : '') : '') +
+    (errs && warns ? ' · ' : '') +
+    (warns ? warns + ' warning' + (warns > 1 ? 's' : '') : '');
+
+  const fixable = complianceIssues.filter(i => i.fix).length;
+  const btn = $('btn-fixall');
+  btn.disabled = fixable === 0;
+  btn.style.opacity = fixable ? '1' : '.45';
+
+  const list = $('compl-list');
+  if (!complianceIssues.length) {
+    list.innerHTML = '<div class="empty"><div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg><br>Your schema JSON matches the AutoSchema format.</div></div>';
+    return;
+  }
+  list.innerHTML = complianceIssues.map((it, i) => `
+    <div class="compl-card ${it.severity}">
+      <div class="compl-ico">${it.severity === 'error' ? '⛔' : '⚠'}</div>
+      <div class="compl-main">
+        ${it.path ? '<div class="compl-path">' + escapeHtml(it.path) + '</div>' : ''}
+        <div class="compl-msg">${escapeHtml(it.message)}</div>
+        ${it.snippet ? '<div class="compl-snippet">' + escapeHtml(it.snippet) + '</div>' : ''}
+      </div>
+      <div class="compl-actions">
+        ${it.fix ? '<button class="btn btn-fix" data-fix="' + i + '">Fix</button>' : ''}
+        ${it.snippet ? '<button class="btn btn-icon" data-copy-snippet="' + i + '" title="Copy snippet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>' : ''}
+      </div>
+    </div>`).join('');
+}
+
+function applyComplianceFix(idx) {
+  const it = complianceIssues[idx];
+  if (!it || !it.fix) return false;
+  const before = editor.value;
+  const after = applyFix(before, it.fix);
+  if (after === before) { toast('Nothing to fix here', 'err'); return false; }
+  editor.value = after;
+  renderLines();
+  validateJSON();
+  runCompliance();
+  if (jsonValid) run();
+  toast('Fixed: ' + it.message.split('.')[0], 'ok');
+  return true;
+}
+
+function autoFixAll() {
+  const { text, rounds } = applyAllFixes(editor.value, complianceIssues);
+  if (text === editor.value) { toast('No fixable issues', 'err'); return; }
+  editor.value = text;
+  renderLines();
+  validateJSON();
+  runCompliance();
+  if (jsonValid) run();
+  toast('Auto-fixed all issues (' + rounds + ' pass' + (rounds > 1 ? 'es' : '') + ')', 'ok');
 }
 
 function parseJSONError(msg) {
@@ -365,6 +468,7 @@ function run() {
     renderSQL(sql);
     renderSuggestions(buildSuggestions(root));
     renderStats(root);
+    runCompliance();
     toast('Generated ' + sql.split('\n').length + ' lines of SQL', 'ok');
   } catch (e) {
     toast('Generation failed: ' + e.message, 'err');
@@ -431,6 +535,20 @@ $('sugg-list').addEventListener('click', async e => {
   if (!item) return;
   (await copyText(item.code)) ? toast('Code copied', 'ok') : toast('Copy failed', 'err');
 });
+
+/* compliance actions (delegated) */
+$('compl-list').addEventListener('click', async e => {
+  const fixBtn = e.target.closest('[data-fix]');
+  if (fixBtn) { applyComplianceFix(+fixBtn.dataset.fix); return; }
+  const cpBtn = e.target.closest('[data-copy-snippet]');
+  if (cpBtn) {
+    const item = complianceIssues[+cpBtn.dataset.copySnippet];
+    if (item && item.snippet) {
+      (await copyText(item.snippet)) ? toast('Snippet copied', 'ok') : toast('Copy failed', 'err');
+    }
+  }
+});
+$('btn-fixall').addEventListener('click', autoFixAll);
 
 /* ---------- boot ---------- */
 

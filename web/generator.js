@@ -204,7 +204,7 @@ function parseColObj(obj) {
   def.type = mapType(rawType);
   def.file_type = fileTypeName(rawType);
   def.default      = obj.default || '';
-  def.collation    = obj.collate || '';
+  def.collation    = obj.collate || obj.collation || '';
   def.compression  = obj.compression || '';
   def.check        = obj.check || '';
   def.comment      = obj.comment || '';

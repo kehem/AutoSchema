@@ -127,7 +127,7 @@ CREATE TABLE IF NOT EXISTS public.products (
 ,
     rating REAL
 ,
-    sku VARCHAR(50) NOT NULL UNIQUE
+    sku VARCHAR(50) COLLATE "C" NOT NULL UNIQUE
 ,
     stock positive_int DEFAULT 1
 ,

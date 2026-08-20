@@ -345,7 +345,13 @@ static void parse_col_obj(const json_t *obj, ColumnDef *def) {
     map_type(raw_type, def->type, sizeof(def->type));
 
     json_str_opt(obj, "default", def->default_expr, sizeof(def->default_expr), "");
-    json_str_opt(obj, "collate", def->collation, sizeof(def->collation), "");
+    /* accept both 'collate' and 'collation' spellings */
+    {
+        char col_tmp[MAX_TYPE] = "";
+        json_str_opt(obj, "collate", col_tmp, sizeof(col_tmp), "");
+        if (!col_tmp[0]) json_str_opt(obj, "collation", col_tmp, sizeof(col_tmp), "");
+        snprintf(def->collation, sizeof(def->collation), "%s", col_tmp);
+    }
     json_str_opt(obj, "compression", def->compression, sizeof(def->compression), "");
     json_str_opt(obj, "check", def->check_expr, sizeof(def->check_expr), "");
     json_str_opt(obj, "comment", def->comment, sizeof(def->comment), "");

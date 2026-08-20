@@ -172,6 +172,7 @@ main {
 .panel-title { font-size: 12px; font-weight: 600; letter-spacing: .6px; text-transform: uppercase; color: var(--tx3); display:flex; align-items:center; gap:8px; }
 .panel-title .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--tx3); transition: background .2s; }
 .panel-title .dot.ok { background: var(--ok); box-shadow: 0 0 8px rgba(52,211,153,.7); }
+.panel-title .dot.warn { background: var(--warn); box-shadow: 0 0 8px rgba(251,191,36,.7); }
 .panel-title .dot.err { background: var(--err); box-shadow: 0 0 8px rgba(248,113,113,.7); }
 .head-spacer { flex: 1; }
 
@@ -326,6 +327,66 @@ pre.code .tok-cte { color: #ffd479; }
   display: grid; place-items: center; min-height: 60%;
 }
 .empty svg { width: 40px; height: 40px; opacity: .5; margin-bottom: 10px; }
+
+/* ---------------- compliance pane ---------------- */
+
+.pane#pane-compl { display: none; flex-direction: column; }
+.pane#pane-compl.active { display: flex; }
+#compl-list { flex: 1; overflow: auto; padding: 12px 16px; display: flex; flex-direction: column; gap: 10px; }
+
+.compl-head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(24,29,51,.5);
+}
+.compl-summary { font: 600 12px var(--font); color: var(--tx2); }
+
+.compl-card {
+  display: flex; gap: 10px; align-items: flex-start;
+  border: 1px solid var(--line);
+  border-left-width: 3px;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: rgba(24,29,51,.5);
+}
+.compl-card.error { border-left-color: var(--err); }
+.compl-card.warning { border-left-color: var(--warn); }
+
+.compl-ico { font-size: 14px; line-height: 1.4; }
+.compl-main { flex: 1; min-width: 0; }
+.compl-path {
+  font: 10.5px var(--mono);
+  color: var(--tx3);
+  background: rgba(148,163,184,.1);
+  display: inline-block;
+  padding: 1px 7px; border-radius: 6px;
+  margin-bottom: 4px;
+  word-break: break-all;
+}
+.compl-msg { font-size: 12.5px; color: var(--tx); line-height: 1.5; }
+.compl-snippet {
+  margin-top: 7px;
+  background: rgba(7,9,15,.6);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: 11.5px/1.6 var(--mono);
+  color: var(--cyan);
+  white-space: pre; overflow-x: auto;
+}
+.compl-actions { display: flex; gap: 6px; flex: none; }
+.btn-fix {
+  font: 600 11.5px var(--font);
+  padding: 5px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(52,211,153,.45);
+  background: rgba(52,211,153,.12);
+  color: var(--ok);
+  cursor: pointer;
+  transition: background .15s;
+}
+.btn-fix:hover { background: rgba(52,211,153,.24); }
 
 /* ---------------- status bar ---------------- */
 
